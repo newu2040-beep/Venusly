@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer Translucent Camera Ring (66dp safe zone centered at 54,54) -->
+    <path
+        android:pathData="M54,28 C68.36,28 80,39.64 80,54 C80,68.36 68.36,80 54,80 C39.64,80 28,68.36 28,54 C28,39.64 39.64,28 54,28 Z"
+        android:strokeWidth="2.5">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="28"
+                android:startY="28"
+                android:endX="80"
+                android:endY="80"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFFFF" />
+                <item android:offset="0.5" android:color="#80FFFFFF" />
+                <item android:offset="1.0" android:color="#FFFFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Glass Lens Disc -->
+    <path
+        android:pathData="M54,32 C66.15,32 76,41.85 76,54 C76,66.15 66.15,76 54,76 C41.85,76 32,66.15 32,54 C32,41.85 41.85,32 54,32 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="32"
+                android:startY="32"
+                android:endX="76"
+                android:endY="76"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#40FFFFFF" />
+                <item android:offset="1.0" android:color="#10FFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Stylized Venusly "V" Aperture Prism -->
+    <path
+        android:pathData="M41,43 L54,67 L67,43"
+        android:strokeWidth="5.5"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Center Lens Pupil / Filter Element -->
+    <path
+        android:pathData="M54,48 C56.76,48 59,50.24 59,53 C59,55.76 56.76,58 54,58 C51.24,58 49,55.76 49,53 C49,50.24 51.24,48 54,48 Z"
+        android:fillColor="#FBBF24" />
+
+    <!-- Sparkle Star - Top Right -->
+    <path
+        android:pathData="M70,33 L71.8,38.2 L77,40 L71.8,41.8 L70,47 L68.2,41.8 L63,40 L68.2,38.2 Z"
+        android:fillColor="#FFFFFFFF" />
+
+    <!-- Sparkle Star - Bottom Left -->
+    <path
+        android:pathData="M37,64 L38.2,67.3 L41.5,68.5 L38.2,69.7 L37,73 L35.8,69.7 L32.5,68.5 L35.8,67.3 Z"
+        android:fillColor="#FEF08A" />
+
+</vector>

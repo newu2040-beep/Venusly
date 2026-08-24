@@ -1,0 +1,6 @@
+{
+  "name": "Venusly",
+  "description": "Aesthetic photo editor with Fuji-film, retro, dreamy glow, digi cam presets, and manual editing tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
