@@ -121,6 +121,7 @@ data class TextOverlay(
     val hasBackgroundPill: Boolean = true,
     val isDateStamp: Boolean = false,
     val rotation: Float = 0f,
+    val alpha: Float = 1.0f,
     val blendMode: String = "Normal" // "Normal", "Multiply", "Screen", "Overlay", "Darken", "Lighten", "ColorDodge", "Difference"
 )
 

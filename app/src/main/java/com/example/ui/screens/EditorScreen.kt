@@ -7,6 +7,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -80,6 +83,11 @@ import androidx.compose.material.icons.filled.MotionPhotosOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Rotate90DegreesCw
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Draw
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
@@ -178,6 +186,8 @@ fun EditorScreen(
     val aiSuccessMessage by editorViewModel.aiSuccessMessage.collectAsState()
     var aiPromptText by remember { mutableStateOf("") }
     var aiIsEditMode by remember { mutableStateOf(true) }
+    var aiApiKey by remember { mutableStateOf("") }
+    var aiAspectRatio by remember { mutableStateOf("1:1") }
     val isCompactMode = LocalCompactMode.current
 
     var showExportSheet by remember { mutableStateOf(false) }
@@ -328,26 +338,38 @@ fun EditorScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 6.dp)
-                .aspectRatio(1.15f)
-                .clip(RoundedCornerShape(26.dp))
-                .background(Color.Black)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = {
-                            editorViewModel.setComparingBefore(true)
-                            tryAwaitRelease()
-                            editorViewModel.setComparingBefore(false)
-                        },
-                        onTap = {
-                            editorViewModel.selectSticker(null)
-                        }
-                    )
-                },
+                .weight(1f) // Let it fill available vertical space above tabs
+                .padding(horizontal = 20.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (displayBitmap != null && !displayBitmap.isRecycled) {
-                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val imageRatio = if (displayBitmap != null && displayBitmap.height > 0) {
+                displayBitmap.width.toFloat() / displayBitmap.height.toFloat()
+            } else 1.15f
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .aspectRatio(imageRatio, matchHeightConstraintsFirst = false)
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(Color.Black)
+                    .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessLow))
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                editorViewModel.setComparingBefore(true)
+                                tryAwaitRelease()
+                                editorViewModel.setComparingBefore(false)
+                            },
+                            onTap = {
+                                editorViewModel.selectSticker(null)
+                                editorViewModel.selectTextOverlay(null)
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (displayBitmap != null && !displayBitmap.isRecycled) {
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val containerWidthPx = constraints.maxWidth.toFloat()
                     val containerHeightPx = constraints.maxHeight.toFloat()
 
@@ -644,6 +666,7 @@ fun EditorScreen(
                     style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.85f), fontSize = 10.sp)
                 )
             }
+            } // Close inner Box
         }
 
         // 3. Tab Bar (Adjust, Colors, Effects, Frames, Details, Light, Overlays)
@@ -1570,46 +1593,69 @@ fun EditorScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
 
-                            // Quick Action Buttons (Add Text, Date Stamp, Custom PNG Sticker Import)
-                            Row(
+                            // Quick Action Buttons
+                            LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Button(
-                                    onClick = { showTextDialog = true },
-                                    shape = CircleShape,
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Filled.TextFields, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Add Text", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                item {
+                                    Button(
+                                        onClick = { showTextDialog = true },
+                                        shape = CircleShape,
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Icon(Icons.Filled.TextFields, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Add Text", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
-
-                                Button(
-                                    onClick = { editorViewModel.addDateStamp() },
-                                    shape = CircleShape,
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Filled.DateRange, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("'98 Date", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                item {
+                                    Button(
+                                        onClick = { editorViewModel.addDateStamp("retro") },
+                                        shape = CircleShape,
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                    ) {
+                                        Icon(Icons.Filled.DateRange, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("'98 Date", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
-
-                                Button(
-                                    onClick = {
-                                        stickerPickerLauncher.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                        )
-                                    },
-                                    shape = CircleShape,
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer),
-                                    modifier = Modifier.weight(1.1f)
-                                ) {
-                                    Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Import PNG", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                item {
+                                    Button(
+                                        onClick = { editorViewModel.addDateStamp("digital") },
+                                        shape = CircleShape,
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                                    ) {
+                                        Icon(Icons.Filled.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Time", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                item {
+                                    Button(
+                                        onClick = { editorViewModel.addDateStamp("signature") },
+                                        shape = CircleShape,
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    ) {
+                                        Icon(Icons.Filled.Draw, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Signature", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                item {
+                                    Button(
+                                        onClick = {
+                                            stickerPickerLauncher.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            )
+                                        },
+                                        shape = CircleShape,
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+                                    ) {
+                                        Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Import", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
 
@@ -1678,6 +1724,15 @@ fun EditorScreen(
                                                     )
                                                 }
                                             }
+
+                                            // Text Opacity Slider
+                                            Text("Opacity: ${(activeText.alpha * 100).toInt()}%", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold))
+                                            Slider(
+                                                value = activeText.alpha,
+                                                onValueChange = { editorViewModel.updateTextOverlayProperties(activeText.id, alpha = it) },
+                                                valueRange = 0f..1f,
+                                                modifier = Modifier.fillMaxWidth().height(24.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -1751,6 +1806,15 @@ fun EditorScreen(
                                                     )
                                                 }
                                             }
+
+                                            // Sticker Opacity Slider
+                                            Text("Opacity: ${(activeStk.alpha * 100).toInt()}%", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold))
+                                            Slider(
+                                                value = activeStk.alpha,
+                                                onValueChange = { editorViewModel.updateStickerProperties(activeStk.id, alpha = it) },
+                                                valueRange = 0f..1f,
+                                                modifier = Modifier.fillMaxWidth().height(24.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -1890,6 +1954,25 @@ fun EditorScreen(
                                 maxLines = 4
                             )
 
+                            // Aspect Ratio Selector
+                            if (!aiIsEditMode) {
+                                Text(
+                                    text = "Aspect Ratio:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                val aspectRatios = listOf("1:1", "16:9", "9:16", "4:3", "3:4")
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items(aspectRatios) { ratio ->
+                                        FilterChip(
+                                            selected = aiAspectRatio == ratio,
+                                            onClick = { aiAspectRatio = ratio },
+                                            label = { Text(ratio, fontSize = 11.sp) }
+                                        )
+                                    }
+                                }
+                            }
+
                             // Prompt Presets Chips
                             Text(
                                 text = "Quick Style Presets:",
@@ -1920,11 +2003,22 @@ fun EditorScreen(
                                 }
                             }
 
+                            // API Key Override
+                            OutlinedTextField(
+                                value = aiApiKey,
+                                onValueChange = { aiApiKey = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text("Gemini API Key (Optional if set in Secrets)", fontSize = 12.sp) },
+                                label = { Text("API Key (Override)", fontSize = 12.sp) },
+                                shape = RoundedCornerShape(14.dp),
+                                singleLine = true
+                            )
+
                             // Generate Button
                             Button(
                                 onClick = {
                                     if (aiPromptText.isNotBlank()) {
-                                        editorViewModel.generateAiImage(aiPromptText, aiIsEditMode)
+                                        editorViewModel.generateAiImage(aiPromptText, aiIsEditMode, aiAspectRatio, aiApiKey)
                                     }
                                 },
                                 enabled = aiPromptText.isNotBlank() && !isAiGenerating,
@@ -2056,6 +2150,29 @@ fun EditorScreen(
         }
 
         // 6. Prominent Blue "Export" Pill Button
+        val undoMsg by editorViewModel.undoMessage.collectAsState()
+        if (undoMsg != null) {
+            Snackbar(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                action = {
+                    if (undoMsg == "Sticker Deleted" || undoMsg == "Text Overlay Deleted") {
+                        TextButton(onClick = { editorViewModel.undoDelete() }) {
+                            Text("UNDO", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                },
+                dismissAction = {
+                    IconButton(onClick = { editorViewModel.clearUndoMessage() }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.inverseOnSurface)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface
+            ) {
+                Text(undoMsg!!)
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2456,7 +2573,7 @@ fun EditorScreen(
 }
 
 @Composable
-private fun EditorToolIconButton(
+fun EditorToolIconButton(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,

@@ -153,7 +153,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _aiSuccessMessage.value = null
     }
 
-    fun generateAiImage(prompt: String, isEditCurrentMode: Boolean) {
+    fun generateAiImage(prompt: String, isEditCurrentMode: Boolean, aspectRatio: String = "1:1", apiKey: String = "") {
         if (prompt.isBlank()) return
         viewModelScope.launch {
             _isAiGenerating.value = true
@@ -166,7 +166,9 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
                 val result = AiImageEngine.generateOrEditImage(
                     prompt = prompt,
-                    sourceBitmap = baseBitmap
+                    sourceBitmap = baseBitmap,
+                    aspectRatio = aspectRatio,
+                    providedApiKey = apiKey
                 )
 
                 result.fold(
@@ -354,18 +356,29 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         _selectedTextOverlayId.value = id
     }
 
-    fun addDateStamp() {
-        val dateFormat = java.text.SimpleDateFormat("''yy MM dd", java.util.Locale.US)
-        val dateString = dateFormat.format(java.util.Date())
+    fun addDateStamp(type: String = "retro") {
+        val dateString = when (type) {
+            "retro" -> java.text.SimpleDateFormat("''yy MM dd", java.util.Locale.US).format(java.util.Date())
+            "digital" -> java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+            "signature" -> "- ${System.getProperty("user.name") ?: "Creator"} -"
+            else -> java.text.SimpleDateFormat("''yy MM dd", java.util.Locale.US).format(java.util.Date())
+        }
+        val (font, hex, isDate, size) = when (type) {
+            "retro" -> listOf("Monospace", "#FF9500", true, 16f)
+            "digital" -> listOf("SansSerif", "#00FFCC", true, 14f)
+            "signature" -> listOf("Cursive", "#FFFFFF", false, 24f)
+            else -> listOf("Monospace", "#FF9500", true, 16f)
+        }
+
         val newOverlay = TextOverlay(
-            text = dateString,
-            xPercent = 0.82f,
+            text = dateString.toString(),
+            xPercent = if (type == "signature") 0.5f else 0.82f,
             yPercent = 0.92f,
-            fontSizeSp = 16f,
-            colorHex = "#FF9500",
-            fontStyle = "Monospace",
+            fontSizeSp = size as Float,
+            colorHex = hex.toString(),
+            fontStyle = font.toString(),
             hasBackgroundPill = false,
-            isDateStamp = true
+            isDateStamp = isDate as Boolean
         )
         _textOverlays.value = _textOverlays.value + newOverlay
         _selectedTextOverlayId.value = newOverlay.id
@@ -389,10 +402,12 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun removeTextOverlay(id: String) {
+        lastDeletedTextOverlay = _textOverlays.value.find { it.id == id }
         _textOverlays.value = _textOverlays.value.filter { it.id != id }
         if (_selectedTextOverlayId.value == id) {
             _selectedTextOverlayId.value = null
         }
+        _undoMessage.value = "Text Overlay Deleted"
         triggerRender()
     }
 
@@ -416,6 +431,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         fontSizeSp: Float? = null,
         hasBackgroundPill: Boolean? = null,
         rotation: Float? = null,
+        alpha: Float? = null,
         blendMode: String? = null
     ) {
         _textOverlays.value = _textOverlays.value.map {
@@ -427,6 +443,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                     fontSizeSp = fontSizeSp ?: it.fontSizeSp,
                     hasBackgroundPill = hasBackgroundPill ?: it.hasBackgroundPill,
                     rotation = rotation ?: it.rotation,
+                    alpha = alpha ?: it.alpha,
                     blendMode = blendMode ?: it.blendMode
                 )
             } else it
@@ -448,6 +465,36 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _selectedStickerId = MutableStateFlow<String?>(null)
     val selectedStickerId: StateFlow<String?> = _selectedStickerId.asStateFlow()
+
+    private var lastDeletedSticker: StickerOverlay? = null
+    private var lastDeletedTextOverlay: TextOverlay? = null
+
+    private val _undoMessage = MutableStateFlow<String?>(null)
+    val undoMessage: StateFlow<String?> = _undoMessage.asStateFlow()
+
+    fun clearUndoMessage() {
+        _undoMessage.value = null
+    }
+
+    fun undoDelete() {
+        var restored = false
+        if (lastDeletedSticker != null) {
+            _stickers.value = _stickers.value + lastDeletedSticker!!
+            _selectedStickerId.value = lastDeletedSticker!!.id
+            lastDeletedSticker = null
+            restored = true
+        }
+        if (lastDeletedTextOverlay != null) {
+            _textOverlays.value = _textOverlays.value + lastDeletedTextOverlay!!
+            _selectedTextOverlayId.value = lastDeletedTextOverlay!!.id
+            lastDeletedTextOverlay = null
+            restored = true
+        }
+        if (restored) {
+            _undoMessage.value = "Restored successfully"
+            triggerRender()
+        }
+    }
 
     fun selectSticker(id: String?) {
         _selectedStickerId.value = id
@@ -501,10 +548,12 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun removeSticker(id: String) {
+        lastDeletedSticker = _stickers.value.find { it.id == id }
         _stickers.value = _stickers.value.filter { it.id != id }
         if (_selectedStickerId.value == id) {
             _selectedStickerId.value = null
         }
+        _undoMessage.value = "Sticker Deleted"
         triggerRender()
     }
 

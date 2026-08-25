@@ -331,6 +331,7 @@ object ImageProcessor {
             } catch (e: Exception) {
                 if (overlay.isDateStamp) Color.parseColor("#FF9500") else Color.WHITE
             }
+            alpha = (overlay.alpha * 255).toInt().coerceIn(0, 255)
             if (overlay.blendMode != "Normal") {
                 xfermode = PorterDuffXfermode(getPorterDuffMode(overlay.blendMode))
             }

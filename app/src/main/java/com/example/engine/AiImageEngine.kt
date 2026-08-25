@@ -48,9 +48,10 @@ object AiImageEngine {
     suspend fun generateOrEditImage(
         prompt: String,
         sourceBitmap: Bitmap? = null,
-        aspectRatio: String = "1:1"
+        aspectRatio: String = "1:1",
+        providedApiKey: String? = null
     ): Result<Bitmap> = withContext(Dispatchers.IO) {
-        val apiKey = try {
+        val apiKey = providedApiKey?.takeIf { it.isNotBlank() } ?: try {
             BuildConfig.GEMINI_API_KEY
         } catch (e: Throwable) {
             ""
@@ -58,7 +59,7 @@ object AiImageEngine {
 
         if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
             return@withContext Result.failure(
-                IllegalStateException("Gemini API key is missing. Please set your key in the Secrets panel.")
+                IllegalStateException("Gemini API key is missing. Please set your key in the AI Gen tab or in the Secrets panel.")
             )
         }
 
