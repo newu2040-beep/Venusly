@@ -36,124 +36,129 @@ object ImageProcessor {
         stickers: List<StickerOverlay> = emptyList(),
         layers: List<LayerItem> = emptyList()
     ): Bitmap = withContext(Dispatchers.Default) {
-        val width = source.width
-        val height = source.height
+        try {
+            val width = source.width
+            val height = source.height
 
-        val baseLayer = layers.find { it.type == LayerType.BASE_IMAGE }
-        val adjLayer = layers.find { it.type == LayerType.ADJUSTMENTS }
-        val grainLayer = layers.find { it.type == LayerType.GRAIN_LIGHT_LEAK }
-        val frameLayer = layers.find { it.type == LayerType.FRAME }
+            val baseLayer = layers.find { it.type == LayerType.BASE_IMAGE }
+            val adjLayer = layers.find { it.type == LayerType.ADJUSTMENTS }
+            val grainLayer = layers.find { it.type == LayerType.GRAIN_LIGHT_LEAK }
+            val frameLayer = layers.find { it.type == LayerType.FRAME }
 
-        val isBaseVisible = baseLayer?.isVisible ?: true
-        val isAdjVisible = adjLayer?.isVisible ?: true
-        val adjOpacity = (adjLayer?.opacity ?: 1.0f) * strength
-        val isGrainVisible = grainLayer?.isVisible ?: true
-        val grainOpacity = (grainLayer?.opacity ?: 1.0f) * strength
-        val isFrameVisible = frameLayer?.isVisible ?: true
-        val frameOpacity = (frameLayer?.opacity ?: 1.0f) * strength
+            val isBaseVisible = baseLayer?.isVisible ?: true
+            val isAdjVisible = adjLayer?.isVisible ?: true
+            val adjOpacity = (adjLayer?.opacity ?: 1.0f) * strength
+            val isGrainVisible = grainLayer?.isVisible ?: true
+            val grainOpacity = (grainLayer?.opacity ?: 1.0f) * strength
+            val isFrameVisible = frameLayer?.isVisible ?: true
+            val frameOpacity = (frameLayer?.opacity ?: 1.0f) * strength
 
-        // 1. Base transformation: Rotation & Flip
-        var currentBitmap = if (isBaseVisible) {
-            applyTransformations(source, adjustments)
-        } else {
-            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        }
+            // 1. Base transformation: Rotation & Flip
+            var currentBitmap = if (isBaseVisible) {
+                applyTransformations(source, adjustments)
+            } else {
+                Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            }
 
-        // 1b. Noise Reduction filter pass
-        if (adjustments.noiseReduction > 0f && isAdjVisible) {
-            currentBitmap = applyNoiseReduction(currentBitmap, adjustments.noiseReduction * adjOpacity)
-        }
+            // 1b. Noise Reduction filter pass
+            if (adjustments.noiseReduction > 0f && isAdjVisible) {
+                currentBitmap = applyNoiseReduction(currentBitmap, adjustments.noiseReduction * adjOpacity)
+            }
 
-        // 2. Color / Tone adjustment via ColorMatrix
-        val result = Bitmap.createBitmap(currentBitmap.width, currentBitmap.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(result)
+            // 2. Color / Tone adjustment via ColorMatrix
+            val result = Bitmap.createBitmap(currentBitmap.width, currentBitmap.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(result)
 
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        if (isAdjVisible && adjOpacity > 0f) {
-            val colorMatrix = ColorMatrixBuilder.buildColorMatrix(adjustments, adjOpacity)
-            paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
-        }
-        canvas.drawBitmap(currentBitmap, 0f, 0f, paint)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            if (isAdjVisible && adjOpacity > 0f) {
+                val colorMatrix = ColorMatrixBuilder.buildColorMatrix(adjustments, adjOpacity)
+                paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
+            }
+            canvas.drawBitmap(currentBitmap, 0f, 0f, paint)
 
-        // 3. Glow / Bloom overlay
-        if (adjustments.glow > 0f && isGrainVisible && grainOpacity > 0f) {
-            drawGlowEffect(canvas, result.width, result.height, adjustments.glow * grainOpacity)
-        }
+            // 3. Glow / Bloom overlay
+            if (adjustments.glow > 0f && isGrainVisible && grainOpacity > 0f) {
+                drawGlowEffect(canvas, result.width, result.height, adjustments.glow * grainOpacity)
+            }
 
-        // 4. Light Leak effect
-        if (adjustments.lightLeak > 0f && isGrainVisible && grainOpacity > 0f) {
-            drawLightLeakEffect(canvas, result.width, result.height, adjustments.lightLeak * grainOpacity)
-        }
+            // 4. Light Leak effect
+            if (adjustments.lightLeak > 0f && isGrainVisible && grainOpacity > 0f) {
+                drawLightLeakEffect(canvas, result.width, result.height, adjustments.lightLeak * grainOpacity)
+            }
 
-        // 5. Film Grain effect
-        if (adjustments.grain > 0f && isGrainVisible && grainOpacity > 0f) {
-            drawGrainEffect(canvas, result.width, result.height, adjustments.grain * grainOpacity)
-        }
+            // 5. Film Grain effect
+            if (adjustments.grain > 0f && isGrainVisible && grainOpacity > 0f) {
+                drawGrainEffect(canvas, result.width, result.height, adjustments.grain * grainOpacity)
+            }
 
-        // 6. Dust & Scratch effect
-        if (adjustments.dustEffect > 0f && isGrainVisible && grainOpacity > 0f) {
-            drawDustEffect(canvas, result.width, result.height, adjustments.dustEffect * grainOpacity)
-        }
+            // 6. Dust & Scratch effect
+            if (adjustments.dustEffect > 0f && isGrainVisible && grainOpacity > 0f) {
+                drawDustEffect(canvas, result.width, result.height, adjustments.dustEffect * grainOpacity)
+            }
 
-        // 7. Vignette effect
-        if (adjustments.vignette > 0f && isGrainVisible && grainOpacity > 0f) {
-            drawVignetteEffect(canvas, result.width, result.height, adjustments.vignette * grainOpacity)
-        }
+            // 7. Vignette effect
+            if (adjustments.vignette > 0f && isGrainVisible && grainOpacity > 0f) {
+                drawVignetteEffect(canvas, result.width, result.height, adjustments.vignette * grainOpacity)
+            }
 
-        // 8a. Custom Photo Corner Rounding applied ONLY to imported photo/image layer
-        var photoLayerClipped = result
-        if (adjustments.photoCornerRadius > 0f && isFrameVisible && frameOpacity > 0f) {
-            photoLayerClipped = clipPhotoLayerCorners(photoLayerClipped, adjustments.photoCornerRadius * frameOpacity)
-        }
+            // 8a. Custom Photo Corner Rounding applied ONLY to imported photo/image layer
+            var photoLayerClipped = result
+            if (adjustments.photoCornerRadius > 0f && isFrameVisible && frameOpacity > 0f) {
+                photoLayerClipped = clipPhotoLayerCorners(photoLayerClipped, adjustments.photoCornerRadius * frameOpacity)
+            }
 
-        // 8b. Embed photo layer inside Matte Frame Container if enabled
-        var framedResult = photoLayerClipped
-        if (adjustments.frameMatteWidth > 0f && isFrameVisible && frameOpacity > 0f) {
-            framedResult = applyMatteFrameContainer(
-                photoLayer = photoLayerClipped,
-                photoCornerRadius = adjustments.photoCornerRadius * frameOpacity,
-                matteWidth = adjustments.frameMatteWidth * frameOpacity,
-                matteColorLong = adjustments.frameMatteColor
-            )
-        }
+            // 8b. Embed photo layer inside Matte Frame Container if enabled
+            var framedResult = photoLayerClipped
+            if (adjustments.frameMatteWidth > 0f && isFrameVisible && frameOpacity > 0f) {
+                framedResult = applyMatteFrameContainer(
+                    photoLayer = photoLayerClipped,
+                    photoCornerRadius = adjustments.photoCornerRadius * frameOpacity,
+                    matteWidth = adjustments.frameMatteWidth * frameOpacity,
+                    matteColorLong = adjustments.frameMatteColor
+                )
+            }
 
-        // 8c. Aesthetic Frames drawn ON TOP (Polaroid, Film, Vintage, etc.)
-        val finalCanvas = Canvas(framedResult)
-        if (adjustments.frame != AestheticFrame.NONE && isFrameVisible && frameOpacity > 0f) {
-            drawAestheticFrame(finalCanvas, framedResult.width, framedResult.height, adjustments.frame)
-        }
+            // 8c. Aesthetic Frames drawn ON TOP (Polaroid, Film, Vintage, etc.)
+            val finalCanvas = Canvas(framedResult)
+            if (adjustments.frame != AestheticFrame.NONE && isFrameVisible && frameOpacity > 0f) {
+                drawAestheticFrame(finalCanvas, framedResult.width, framedResult.height, adjustments.frame)
+            }
 
-        var finalResult = framedResult
+            var finalResult = framedResult
 
-        // 9. Overlays according to explicit layer stack order or default order
-        val overlayLayers = layers.filter { it.type == LayerType.STICKER || it.type == LayerType.TEXT_OVERLAY }
-        if (overlayLayers.isNotEmpty()) {
-            for (l in overlayLayers) {
-                if (!l.isVisible || l.opacity <= 0f) continue
-                if (l.type == LayerType.TEXT_OVERLAY) {
-                    val overlay = textOverlays.find { it.id == l.associatedId }
-                    if (overlay != null) {
-                        drawTextOverlay(finalCanvas, finalResult.width, finalResult.height, overlay)
-                    }
-                } else if (l.type == LayerType.STICKER) {
-                    val sticker = stickers.find { it.id == l.associatedId }
-                    if (sticker != null) {
-                        val modifiedSticker = sticker.copy(alpha = sticker.alpha * l.opacity)
-                        drawStickerOverlay(finalCanvas, finalResult.width, finalResult.height, modifiedSticker)
+            // 9. Overlays according to explicit layer stack order or default order
+            val overlayLayers = layers.filter { it.type == LayerType.STICKER || it.type == LayerType.TEXT_OVERLAY }
+            if (overlayLayers.isNotEmpty()) {
+                for (l in overlayLayers) {
+                    if (!l.isVisible || l.opacity <= 0f) continue
+                    if (l.type == LayerType.TEXT_OVERLAY) {
+                        val overlay = textOverlays.find { it.id == l.associatedId }
+                        if (overlay != null) {
+                            drawTextOverlay(finalCanvas, finalResult.width, finalResult.height, overlay)
+                        }
+                    } else if (l.type == LayerType.STICKER) {
+                        val sticker = stickers.find { it.id == l.associatedId }
+                        if (sticker != null) {
+                            val modifiedSticker = sticker.copy(alpha = sticker.alpha * l.opacity)
+                            drawStickerOverlay(finalCanvas, finalResult.width, finalResult.height, modifiedSticker)
+                        }
                     }
                 }
+            } else {
+                // Default fallbacks if layers list is empty
+                for (overlay in textOverlays) {
+                    drawTextOverlay(finalCanvas, finalResult.width, finalResult.height, overlay)
+                }
+                for (sticker in stickers) {
+                    drawStickerOverlay(finalCanvas, finalResult.width, finalResult.height, sticker)
+                }
             }
-        } else {
-            // Default fallbacks if layers list is empty
-            for (overlay in textOverlays) {
-                drawTextOverlay(finalCanvas, finalResult.width, finalResult.height, overlay)
-            }
-            for (sticker in stickers) {
-                drawStickerOverlay(finalCanvas, finalResult.width, finalResult.height, sticker)
-            }
-        }
 
-        finalResult
+            finalResult
+        } catch (e: Throwable) {
+            e.printStackTrace()
+            source
+        }
     }
 
     private fun applyTransformations(source: Bitmap, adjustments: AdjustmentValues): Bitmap {
@@ -952,77 +957,103 @@ object ImageProcessor {
 
     private fun applyNoiseReduction(source: Bitmap, intensity: Float): Bitmap {
         if (intensity <= 0f) return source
-        val width = source.width
-        val height = source.height
-        val denoised = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        return try {
+            val width = source.width
+            val height = source.height
 
-        val norm = (intensity / 100f).coerceIn(0f, 1f)
-        val threshold = 12f + norm * 50f
-        val smoothingFactor = norm * 0.85f
+            // Max scale limit to prevent OOM on high-res photos
+            val maxDim = 800
+            val scale = if (width > maxDim || height > maxDim) {
+                maxDim.toFloat() / Math.max(width, height)
+            } else 1.0f
 
-        val pixels = IntArray(width * height)
-        val resultPixels = IntArray(width * height)
-        source.getPixels(pixels, 0, width, 0, 0, width, height)
+            val workBitmap = if (scale < 1.0f) {
+                Bitmap.createScaledBitmap(source, (width * scale).toInt().coerceAtLeast(1), (height * scale).toInt().coerceAtLeast(1), true)
+            } else {
+                source
+            }
 
-        for (y in 0 until height) {
-            val yMin = (y - 1).coerceAtLeast(0)
-            val yMax = (y + 1).coerceAtMost(height - 1)
-            for (x in 0 until width) {
-                val xMin = (x - 1).coerceAtLeast(0)
-                val xMax = (x + 1).coerceAtMost(width - 1)
+            val w = workBitmap.width
+            val h = workBitmap.height
+            val denoised = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
 
-                val centerIdx = y * width + x
-                val centerPixel = pixels[centerIdx]
-                val cA = (centerPixel shr 24) and 0xFF
-                val cR = (centerPixel shr 16) and 0xFF
-                val cG = (centerPixel shr 8) and 0xFF
-                val cB = centerPixel and 0xFF
+            val norm = (intensity / 100f).coerceIn(0f, 1f)
+            val threshold = 12f + norm * 50f
+            val smoothingFactor = norm * 0.85f
 
-                var sumR = 0f
-                var sumG = 0f
-                var sumB = 0f
-                var totalWeight = 0f
+            val pixels = IntArray(w * h)
+            val resultPixels = IntArray(w * h)
+            workBitmap.getPixels(pixels, 0, w, 0, 0, w, h)
 
-                for (ny in yMin..yMax) {
-                    val rowIdx = ny * width
-                    for (nx in xMin..xMax) {
-                        val p = pixels[rowIdx + nx]
-                        val pR = (p shr 16) and 0xFF
-                        val pG = (p shr 8) and 0xFF
-                        val pB = p and 0xFF
+            val inv2ThresholdSq = -1f / (2f * threshold * threshold)
 
-                        val diffR = (pR - cR).toFloat()
-                        val diffG = (pG - cG).toFloat()
-                        val diffB = (pB - cB).toFloat()
-                        val colorDiff = Math.sqrt((diffR * diffR + diffG * diffG + diffB * diffB).toDouble()).toFloat()
+            for (y in 0 until h) {
+                val yMin = (y - 1).coerceAtLeast(0)
+                val yMax = (y + 1).coerceAtMost(h - 1)
+                for (x in 0 until w) {
+                    val centerIdx = y * w + x
+                    val centerPixel = pixels[centerIdx]
+                    val cA = (centerPixel shr 24) and 0xFF
+                    val cR = (centerPixel shr 16) and 0xFF
+                    val cG = (centerPixel shr 8) and 0xFF
+                    val cB = centerPixel and 0xFF
 
-                        val rangeWeight = Math.exp((- (colorDiff * colorDiff) / (2f * threshold * threshold)).toDouble()).toFloat()
+                    var sumR = 0f
+                    var sumG = 0f
+                    var sumB = 0f
+                    var totalWeight = 0f
 
-                        sumR += pR * rangeWeight
-                        sumG += pG * rangeWeight
-                        sumB += pB * rangeWeight
-                        totalWeight += rangeWeight
+                    val xMin = (x - 1).coerceAtLeast(0)
+                    val xMax = (x + 1).coerceAtMost(w - 1)
+
+                    for (ny in yMin..yMax) {
+                        val rowIdx = ny * w
+                        for (nx in xMin..xMax) {
+                            val p = pixels[rowIdx + nx]
+                            val pR = (p shr 16) and 0xFF
+                            val pG = (p shr 8) and 0xFF
+                            val pB = p and 0xFF
+
+                            val diffR = (pR - cR).toFloat()
+                            val diffG = (pG - cG).toFloat()
+                            val diffB = (pB - cB).toFloat()
+                            val colorDiffSq = diffR * diffR + diffG * diffG + diffB * diffB
+
+                            val rangeWeight = Math.exp((colorDiffSq * inv2ThresholdSq).toDouble()).toFloat()
+
+                            sumR += pR * rangeWeight
+                            sumG += pG * rangeWeight
+                            sumB += pB * rangeWeight
+                            totalWeight += rangeWeight
+                        }
+                    }
+
+                    if (totalWeight > 0f) {
+                        val smoothR = sumR / totalWeight
+                        val smoothG = sumG / totalWeight
+                        val smoothB = sumB / totalWeight
+
+                        val finalR = (cR * (1f - smoothingFactor) + smoothR * smoothingFactor).toInt().coerceIn(0, 255)
+                        val finalG = (cG * (1f - smoothingFactor) + smoothG * smoothingFactor).toInt().coerceIn(0, 255)
+                        val finalB = (cB * (1f - smoothingFactor) + smoothB * smoothingFactor).toInt().coerceIn(0, 255)
+
+                        resultPixels[centerIdx] = (cA shl 24) or (finalR shl 16) or (finalG shl 8) or finalB
+                    } else {
+                        resultPixels[centerIdx] = centerPixel
                     }
                 }
-
-                if (totalWeight > 0f) {
-                    val smoothR = (sumR / totalWeight).coerceIn(0f, 255f)
-                    val smoothG = (sumG / totalWeight).coerceIn(0f, 255f)
-                    val smoothB = (sumB / totalWeight).coerceIn(0f, 255f)
-
-                    val finalR = (cR * (1f - smoothingFactor) + smoothR * smoothingFactor).toInt().coerceIn(0, 255)
-                    val finalG = (cG * (1f - smoothingFactor) + smoothG * smoothingFactor).toInt().coerceIn(0, 255)
-                    val finalB = (cB * (1f - smoothingFactor) + smoothB * smoothingFactor).toInt().coerceIn(0, 255)
-
-                    resultPixels[centerIdx] = (cA shl 24) or (finalR shl 16) or (finalG shl 8) or finalB
-                } else {
-                    resultPixels[centerIdx] = centerPixel
-                }
             }
-        }
 
-        denoised.setPixels(resultPixels, 0, width, 0, 0, width, height)
-        return denoised
+            denoised.setPixels(resultPixels, 0, w, 0, 0, w, h)
+            if (scale < 1.0f) {
+                Bitmap.createScaledBitmap(denoised, width, height, true)
+            } else {
+                denoised
+            }
+        } catch (e: Throwable) {
+            e.printStackTrace()
+            source
+        }
     }
 
     /**

@@ -69,7 +69,11 @@ import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.FormatColorFill
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SuggestionChip
 import com.example.ui.components.BatchProcessingSheet
 import com.example.ui.components.LayersSheet
 import androidx.compose.material.icons.filled.MotionPhotosOn
@@ -169,6 +173,11 @@ fun EditorScreen(
     val textOverlays by editorViewModel.textOverlays.collectAsState()
     val selectedTextOverlayId by editorViewModel.selectedTextOverlayId.collectAsState()
     val gridOverlayMode by editorViewModel.gridOverlayMode.collectAsState()
+    val isAiGenerating by editorViewModel.isAiGenerating.collectAsState()
+    val aiErrorMessage by editorViewModel.aiErrorMessage.collectAsState()
+    val aiSuccessMessage by editorViewModel.aiSuccessMessage.collectAsState()
+    var aiPromptText by remember { mutableStateOf("") }
+    var aiIsEditMode by remember { mutableStateOf(true) }
     val isCompactMode = LocalCompactMode.current
 
     var showExportSheet by remember { mutableStateOf(false) }
@@ -337,17 +346,27 @@ fun EditorScreen(
                 },
             contentAlignment = Alignment.Center
         ) {
-            if (displayBitmap != null) {
+            if (displayBitmap != null && !displayBitmap.isRecycled) {
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val containerWidthPx = constraints.maxWidth.toFloat()
                     val containerHeightPx = constraints.maxHeight.toFloat()
 
-                    Image(
-                        bitmap = displayBitmap.asImageBitmap(),
-                        contentDescription = "Editing Canvas",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    val safeImageBitmap = remember(displayBitmap) {
+                        try {
+                            if (!displayBitmap.isRecycled) displayBitmap.asImageBitmap() else null
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+
+                    if (safeImageBitmap != null) {
+                        Image(
+                            bitmap = safeImageBitmap,
+                            contentDescription = "Editing Canvas",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
 
                     // Composition Grid Overlay (Rule of Thirds, Golden Ratio, Center Grid)
                     CompositionGridOverlay(
@@ -1759,6 +1778,228 @@ fun EditorScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(text = s, fontSize = 22.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                EditorTab.AI_GEN -> {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Filled.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = "Gemini AI Studio Studio Engine",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = CircleShape
+                                ) {
+                                    Text(
+                                        text = "3.1 Flash",
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // Mode Selector
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FilterChip(
+                                    selected = aiIsEditMode,
+                                    onClick = { aiIsEditMode = true },
+                                    label = { Text("Edit Current Photo", fontSize = 12.sp) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Filled.Tune,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                FilterChip(
+                                    selected = !aiIsEditMode,
+                                    onClick = { aiIsEditMode = false },
+                                    label = { Text("Create New Image", fontSize = 12.sp) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Filled.Collections,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            // Prompt Input Field
+                            OutlinedTextField(
+                                value = aiPromptText,
+                                onValueChange = {
+                                    aiPromptText = it
+                                    editorViewModel.clearAiMessages()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = {
+                                    Text(
+                                        if (aiIsEditMode) "e.g., Add subtle sunset light leak and vintage film mood..."
+                                        else "e.g., Retro 90s aesthetic portrait with warm pastel lighting...",
+                                        fontSize = 12.sp
+                                    )
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                trailingIcon = {
+                                    if (aiPromptText.isNotEmpty()) {
+                                        IconButton(onClick = { aiPromptText = "" }) {
+                                            Icon(Icons.Filled.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                },
+                                minLines = 2,
+                                maxLines = 4
+                            )
+
+                            // Prompt Presets Chips
+                            Text(
+                                text = "Quick Style Presets:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            val aiPresets = listOf(
+                                "🌅 Warm Sunset Glow" to "Transform image with warm golden hour sunset glow, soft highlights, and retro warmth",
+                                "🎬 35mm Vintage Film" to "Add authentic 35mm film grain, subtle light leaks, and warm Kodak Portra color tones",
+                                "🌆 Cyber Neon Night" to "Futuristic night scene with vibrant cyan and magenta neon ambient lighting",
+                                "🌸 Soft Pastel Dream" to "Dreamy pastel aesthetic with soft glow, gentle contrast, and dreamy colors",
+                                "🖤 Vintage Film Noir" to "High-contrast monochrome film noir aesthetic with deep shadows and moody tones"
+                            )
+
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(aiPresets) { (label, promptVal) ->
+                                    SuggestionChip(
+                                        onClick = {
+                                            aiPromptText = promptVal
+                                            editorViewModel.clearAiMessages()
+                                        },
+                                        label = { Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium) },
+                                        shape = CircleShape
+                                    )
+                                }
+                            }
+
+                            // Generate Button
+                            Button(
+                                onClick = {
+                                    if (aiPromptText.isNotBlank()) {
+                                        editorViewModel.generateAiImage(aiPromptText, aiIsEditMode)
+                                    }
+                                },
+                                enabled = aiPromptText.isNotBlank() && !isAiGenerating,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                if (isAiGenerating) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Generating with AI...", fontWeight = FontWeight.Bold)
+                                } else {
+                                    Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        if (aiIsEditMode) "Transform Photo with AI" else "Generate Image with AI",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // Feedback Banners
+                            aiSuccessMessage?.let { msg ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.CheckCircle,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            text = msg,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+
+                            aiErrorMessage?.let { err ->
+                                Surface(
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Info,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            text = err,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
                                     }
                                 }
                             }

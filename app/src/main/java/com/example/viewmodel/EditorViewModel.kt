@@ -13,6 +13,7 @@ import com.example.R
 import com.example.data.AppDatabase
 import com.example.data.DefaultPresets
 import com.example.data.ProjectEntity
+import com.example.engine.AiImageEngine
 import com.example.engine.BitmapUtils
 import com.example.engine.ImageProcessor
 import com.example.engine.NotificationHelper
@@ -136,6 +137,56 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _batchStatusMessage = MutableStateFlow<String?>(null)
     val batchStatusMessage: StateFlow<String?> = _batchStatusMessage.asStateFlow()
+
+    // AI Generation / Editing State
+    private val _isAiGenerating = MutableStateFlow(false)
+    val isAiGenerating: StateFlow<Boolean> = _isAiGenerating.asStateFlow()
+
+    private val _aiErrorMessage = MutableStateFlow<String?>(null)
+    val aiErrorMessage: StateFlow<String?> = _aiErrorMessage.asStateFlow()
+
+    private val _aiSuccessMessage = MutableStateFlow<String?>(null)
+    val aiSuccessMessage: StateFlow<String?> = _aiSuccessMessage.asStateFlow()
+
+    fun clearAiMessages() {
+        _aiErrorMessage.value = null
+        _aiSuccessMessage.value = null
+    }
+
+    fun generateAiImage(prompt: String, isEditCurrentMode: Boolean) {
+        if (prompt.isBlank()) return
+        viewModelScope.launch {
+            _isAiGenerating.value = true
+            _aiErrorMessage.value = null
+            _aiSuccessMessage.value = null
+            try {
+                val baseBitmap = if (isEditCurrentMode) {
+                    _processedBitmap.value ?: _originalBitmap.value
+                } else null
+
+                val result = AiImageEngine.generateOrEditImage(
+                    prompt = prompt,
+                    sourceBitmap = baseBitmap
+                )
+
+                result.fold(
+                    onSuccess = { generatedBitmap ->
+                        _originalBitmap.value = generatedBitmap
+                        _processedBitmap.value = generatedBitmap
+                        _aiSuccessMessage.value = if (isEditCurrentMode) "Photo transformed with AI! ✨" else "AI Image generated successfully! ✨"
+                        triggerRender()
+                    },
+                    onFailure = { err ->
+                        _aiErrorMessage.value = err.message ?: "AI Generation failed."
+                    }
+                )
+            } catch (e: Throwable) {
+                _aiErrorMessage.value = e.message ?: "AI Generation failed."
+            } finally {
+                _isAiGenerating.value = false
+            }
+        }
+    }
 
     private var processJob: Job? = null
 

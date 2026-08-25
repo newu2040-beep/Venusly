@@ -144,7 +144,8 @@ enum class EditorTab(val title: String) {
     FRAMES("Frames"),
     DETAILS("Details"),
     LIGHT("Light"),
-    OVERLAYS("Overlays")
+    OVERLAYS("Overlays"),
+    AI_GEN("AI Magic")
 }
 
 enum class GridOverlayMode(val displayName: String, val badgeText: String) {

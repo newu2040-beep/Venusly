@@ -150,6 +150,10 @@ object SmartCropEngine {
     suspend fun autoCropSubject(bitmap: Bitmap, targetRatio: Float): Bitmap = withContext(Dispatchers.Default) {
         val (cx, cy) = detectSubjectCentroid(bitmap)
         val bounds = computeCropBounds(bitmap.width, bitmap.height, targetRatio, cx, cy)
-        Bitmap.createBitmap(bitmap, bounds.left, bounds.top, bounds.width(), bounds.height())
+        val safeLeft = bounds.left.coerceIn(0, (bitmap.width - 1).coerceAtLeast(0))
+        val safeTop = bounds.top.coerceIn(0, (bitmap.height - 1).coerceAtLeast(0))
+        val safeWidth = bounds.width().coerceIn(1, bitmap.width - safeLeft)
+        val safeHeight = bounds.height().coerceIn(1, bitmap.height - safeTop)
+        Bitmap.createBitmap(bitmap, safeLeft, safeTop, safeWidth, safeHeight)
     }
 }

@@ -140,9 +140,6 @@ object BitmapUtils {
                     values.put(MediaStore.Images.Media.IS_PENDING, 0)
                     resolver.update(uri, values, null, null)
                 }
-                if (scaledBitmap != bitmap) {
-                    scaledBitmap.recycle()
-                }
                 return@withContext uri
             } catch (e: Exception) {
                 e.printStackTrace()
