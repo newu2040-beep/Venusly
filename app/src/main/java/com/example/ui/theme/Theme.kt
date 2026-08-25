@@ -21,20 +21,20 @@ fun createPastelColorScheme(pastelTheme: PastelTheme, isDark: Boolean): ColorSch
             onPrimary = Color(0xFF0F172A),
             primaryContainer = pastelTheme.primaryColor.copy(alpha = 0.35f),
             onPrimaryContainer = pastelTheme.containerColor,
-            secondary = pastelTheme.accentColor,
-            onSecondary = Color(0xFF0F172A),
-            secondaryContainer = pastelTheme.primaryColor.copy(alpha = 0.25f),
-            onSecondaryContainer = pastelTheme.containerColor,
+            secondary = pastelTheme.primaryColor,
+            onSecondary = Color.White,
+            secondaryContainer = pastelTheme.accentColor.copy(alpha = 0.20f),
+            onSecondaryContainer = pastelTheme.accentColor,
             tertiary = pastelTheme.accentColor,
             onTertiary = Color(0xFF0F172A),
             background = pastelTheme.darkBgColor,
             onBackground = DarkTextPrimary,
-            surface = DarkSurface,
+            surface = pastelTheme.darkSurfaceColor,
             onSurface = DarkTextPrimary,
-            surfaceVariant = DarkSurfaceVariant,
+            surfaceVariant = pastelTheme.darkSurfaceVariantColor,
             onSurfaceVariant = DarkTextSecondary,
-            outline = DarkBorder,
-            outlineVariant = Color(0xFF1E293B)
+            outline = pastelTheme.accentColor.copy(alpha = 0.25f),
+            outlineVariant = Color(0xFF334155).copy(alpha = 0.5f)
         )
     } else {
         lightColorScheme(
@@ -50,12 +50,12 @@ fun createPastelColorScheme(pastelTheme: PastelTheme, isDark: Boolean): ColorSch
             onTertiary = Color.White,
             background = pastelTheme.lightBgColor,
             onBackground = LightTextPrimary,
-            surface = LightSurface,
+            surface = pastelTheme.lightSurfaceColor,
             onSurface = LightTextPrimary,
-            surfaceVariant = LightSurfaceVariant,
+            surfaceVariant = pastelTheme.containerColor.copy(alpha = 0.45f),
             onSurfaceVariant = LightTextSecondary,
-            outline = LightBorder,
-            outlineVariant = Color(0xFFE2E8F0)
+            outline = pastelTheme.primaryColor.copy(alpha = 0.20f),
+            outlineVariant = pastelTheme.primaryColor.copy(alpha = 0.08f)
         )
     }
 }

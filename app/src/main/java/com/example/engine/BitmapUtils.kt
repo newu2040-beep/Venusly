@@ -87,10 +87,31 @@ object BitmapUtils {
         bitmap: Bitmap,
         format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG,
         quality: Int = 95,
+        targetResolution: Int = 3840,
         title: String = "Venusly_${System.currentTimeMillis()}"
     ): Uri? = withContext(Dispatchers.IO) {
-        val mimeType = if (format == Bitmap.CompressFormat.PNG) "image/png" else "image/jpeg"
-        val extension = if (format == Bitmap.CompressFormat.PNG) ".png" else ".jpg"
+        val scaledBitmap = if (targetResolution < 3840 && (bitmap.width > targetResolution || bitmap.height > targetResolution)) {
+            val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
+            val (newW, newH) = if (bitmap.width >= bitmap.height) {
+                targetResolution to (targetResolution / ratio).toInt()
+            } else {
+                (targetResolution * ratio).toInt() to targetResolution
+            }
+            Bitmap.createScaledBitmap(bitmap, newW, newH, true)
+        } else {
+            bitmap
+        }
+
+        val mimeType = when (format) {
+            Bitmap.CompressFormat.PNG -> "image/png"
+            Bitmap.CompressFormat.WEBP -> "image/webp"
+            else -> "image/jpeg"
+        }
+        val extension = when (format) {
+            Bitmap.CompressFormat.PNG -> ".png"
+            Bitmap.CompressFormat.WEBP -> ".webp"
+            else -> ".jpg"
+        }
         val displayName = "$title$extension"
 
         val values = ContentValues().apply {
@@ -109,7 +130,7 @@ object BitmapUtils {
             try {
                 val out: OutputStream? = resolver.openOutputStream(uri)
                 if (out != null) {
-                    bitmap.compress(format, quality, out)
+                    scaledBitmap.compress(format, quality, out)
                     out.flush()
                     out.close()
                 }
@@ -118,6 +139,9 @@ object BitmapUtils {
                     values.clear()
                     values.put(MediaStore.Images.Media.IS_PENDING, 0)
                     resolver.update(uri, values, null, null)
+                }
+                if (scaledBitmap != bitmap) {
+                    scaledBitmap.recycle()
                 }
                 return@withContext uri
             } catch (e: Exception) {

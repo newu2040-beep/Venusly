@@ -7,6 +7,7 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
@@ -37,6 +38,11 @@ object ImageProcessor {
 
         // 1. Base transformation: Rotation & Flip
         var currentBitmap = applyTransformations(source, adjustments)
+
+        // 1b. Noise Reduction filter pass (smooth high-ISO grain before color matrix)
+        if (adjustments.noiseReduction > 0f) {
+            currentBitmap = applyNoiseReduction(currentBitmap, adjustments.noiseReduction * strength)
+        }
 
         // 2. Color / Tone adjustment via ColorMatrix
         val result = Bitmap.createBitmap(currentBitmap.width, currentBitmap.height, Bitmap.Config.ARGB_8888)
@@ -77,17 +83,30 @@ object ImageProcessor {
             drawAestheticFrame(canvas, result.width, result.height, adjustments.frame)
         }
 
+        // 8b. Custom Photo Corner Rounding & Matte Frame Padding
+        var finalResult = result
+        if (adjustments.photoCornerRadius > 0f || adjustments.frameMatteWidth > 0f) {
+            finalResult = applyPhotoCornerRoundingAndMatteFrame(
+                finalResult,
+                adjustments.photoCornerRadius * strength,
+                adjustments.frameMatteWidth * strength,
+                adjustments.frameMatteColor
+            )
+        }
+
+        val finalCanvas = Canvas(finalResult)
+
         // 9. Text & Date stamp overlays
         for (overlay in textOverlays) {
-            drawTextOverlay(canvas, result.width, result.height, overlay)
+            drawTextOverlay(finalCanvas, finalResult.width, finalResult.height, overlay)
         }
 
         // 10. Sticker overlays
         for (sticker in stickers) {
-            drawStickerOverlay(canvas, result.width, result.height, sticker)
+            drawStickerOverlay(finalCanvas, finalResult.width, finalResult.height, sticker)
         }
 
-        result
+        finalResult
     }
 
     private fun applyTransformations(source: Bitmap, adjustments: AdjustmentValues): Bitmap {
@@ -349,6 +368,85 @@ object ImageProcessor {
                 canvas.drawText("VENUSLY • NOIR 35MM", w * 0.5f, h - (borderBottom * 0.4f), textPaint)
             }
 
+            AestheticFrame.POLAROID_PASTEL -> {
+                val borderLR = w * 0.055f
+                val borderTop = h * 0.055f
+                val borderBottom = h * 0.16f
+
+                val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(252, 231, 243) // Soft Sakura blush
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRect(0f, 0f, borderLR, h, framePaint)
+                canvas.drawRect(w - borderLR, 0f, w, h, framePaint)
+                canvas.drawRect(0f, 0f, w, borderTop, framePaint)
+                canvas.drawRect(0f, h - borderBottom, w, h, framePaint)
+
+                val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.argb(50, 225, 29, 72)
+                    style = Paint.Style.STROKE
+                    strokeWidth = (w / 600f).coerceAtLeast(1.5f)
+                }
+                canvas.drawRect(borderLR, borderTop, w - borderLR, h - borderBottom, linePaint)
+
+                val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(225, 29, 72)
+                    textSize = (w / 32f).coerceAtLeast(12f)
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
+                }
+                canvas.drawText("🌸 VENUSLY • PASTEL BLOOM", w * 0.5f, h - (borderBottom * 0.4f), textPaint)
+            }
+
+            AestheticFrame.DIGICAM_OSD -> {
+                val barH = h * 0.065f
+                val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.argb(140, 0, 0, 0)
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRect(0f, 0f, w, barH, overlayPaint)
+                canvas.drawRect(0f, h - barH, w, h, overlayPaint)
+
+                val osdText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(255, 255, 255)
+                    textSize = (barH * 0.42f).coerceAtLeast(11f)
+                    typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                }
+                val redRec = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(239, 68, 68)
+                    textSize = (barH * 0.42f).coerceAtLeast(11f)
+                    typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                }
+                val amberText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(245, 158, 11)
+                    textSize = (barH * 0.42f).coerceAtLeast(11f)
+                    typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                }
+
+                // Top OSD status
+                canvas.drawText("● REC", w * 0.04f, barH * 0.65f, redRec)
+                canvas.drawText("HQ 4K", w * 0.28f, barH * 0.65f, osdText)
+                canvas.drawText("ISO 100", w * 0.52f, barH * 0.65f, osdText)
+                canvas.drawText("[■■■]", w * 0.82f, barH * 0.65f, osdText)
+
+                // Bottom OSD status
+                canvas.drawText("F2.8  1/250s  +0.3EV", w * 0.04f, h - barH * 0.35f, osdText)
+                canvas.drawText("'04 07 28", w * 0.72f, h - barH * 0.35f, amberText)
+
+                // Center Autofocus bracket
+                val focusLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.argb(120, 255, 255, 255)
+                    style = Paint.Style.STROKE
+                    strokeWidth = 2f
+                }
+                val cx = w * 0.5f
+                val cy = h * 0.5f
+                val size = w * 0.08f
+                canvas.drawRect(cx - size, cy - size, cx + size, cy + size, focusLine)
+                canvas.drawLine(cx - size * 0.4f, cy, cx + size * 0.4f, cy, focusLine)
+                canvas.drawLine(cx, cy - size * 0.4f, cx, cy + size * 0.4f, focusLine)
+            }
+
             AestheticFrame.FILM_35MM -> {
                 val stripHeight = h * 0.11f
                 val filmPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -540,6 +638,388 @@ object ImageProcessor {
                 }
                 canvas.drawRoundRect(RectF(bw, bh, w - bw, h - bh), cornerRadius, cornerRadius, linePaint)
             }
+
+            AestheticFrame.Y2K_STICKER_FRAME -> {
+                val bw = w * 0.045f
+                val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(254, 242, 242)
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRect(0f, 0f, bw, h, bgPaint)
+                canvas.drawRect(w - bw, 0f, w, h, bgPaint)
+                canvas.drawRect(0f, 0f, w, bw, bgPaint)
+                canvas.drawRect(0f, h - bw, w, h, bgPaint)
+
+                // Washi tape corners
+                val tapePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.argb(200, 244, 114, 182)
+                    style = Paint.Style.FILL
+                }
+                val tapeSize = w * 0.10f
+                val tapeH = w * 0.035f
+
+                // Top left tape
+                canvas.save()
+                canvas.rotate(-45f, bw * 1.2f, bw * 1.2f)
+                canvas.drawRect(bw * 0.5f, bw * 0.8f, bw * 0.5f + tapeSize, bw * 0.8f + tapeH, tapePaint)
+                canvas.restore()
+
+                // Top right tape
+                canvas.save()
+                canvas.rotate(45f, w - bw * 1.2f, bw * 1.2f)
+                canvas.drawRect(w - bw * 1.5f - tapeSize, bw * 0.8f, w - bw * 1.5f, bw * 0.8f + tapeH, tapePaint)
+                canvas.restore()
+
+                // Bottom text
+                val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(219, 39, 119)
+                    textSize = (w / 36f).coerceAtLeast(11f)
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
+                }
+                canvas.drawText("★ 2000s Y2K SCRAPBOOK ★", w * 0.5f, h - (bw * 0.3f), textPaint)
+            }
+
+            AestheticFrame.NEON_CYBER_BORDER -> {
+                val line1 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(217, 70, 239) // Neon Magenta
+                    style = Paint.Style.STROKE
+                    strokeWidth = (w / 200f).coerceAtLeast(3f)
+                }
+                val line2 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(6, 182, 212) // Electric Cyan
+                    style = Paint.Style.STROKE
+                    strokeWidth = (w / 400f).coerceAtLeast(1.5f)
+                }
+                val m1 = w * 0.025f
+                val m2 = w * 0.045f
+                canvas.drawRect(m1, m1, w - m1, h - m1, line1)
+                canvas.drawRect(m2, m2, w - m2, h - m2, line2)
+
+                // Corner crosshairs
+                val crossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.WHITE
+                    style = Paint.Style.STROKE
+                    strokeWidth = 2f
+                }
+                val cl = w * 0.03f
+                // Top-left
+                canvas.drawLine(m1, m1, m1 + cl, m1, crossPaint)
+                canvas.drawLine(m1, m1, m1, m1 + cl, crossPaint)
+                // Top-right
+                canvas.drawLine(w - m1, m1, w - m1 - cl, m1, crossPaint)
+                canvas.drawLine(w - m1, m1, w - m1, m1 + cl, crossPaint)
+                // Bottom-left
+                canvas.drawLine(m1, h - m1, m1 + cl, h - m1, crossPaint)
+                canvas.drawLine(m1, h - m1, m1, h - m1 - cl, crossPaint)
+                // Bottom-right
+                canvas.drawLine(w - m1, h - m1, w - m1 - cl, h - m1, crossPaint)
+                canvas.drawLine(w - m1, h - m1, w - m1, h - m1 - cl, crossPaint)
+            }
+
+            AestheticFrame.SCALLOPED_LACE -> {
+                val bw = w * 0.05f
+                val bh = h * 0.05f
+                val lacePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(255, 241, 242)
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRect(0f, 0f, bw, h, lacePaint)
+                canvas.drawRect(w - bw, 0f, w, h, lacePaint)
+                canvas.drawRect(0f, 0f, w, bh, lacePaint)
+                canvas.drawRect(0f, h - bh, w, h, lacePaint)
+
+                val scallPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(251, 113, 133)
+                    style = Paint.Style.STROKE
+                    strokeWidth = 2f
+                }
+                val radius = bw * 0.5f
+                var curX = bw + radius
+                while (curX < w - bw) {
+                    canvas.drawArc(RectF(curX - radius, bh - radius, curX + radius, bh + radius), 0f, 180f, false, scallPaint)
+                    canvas.drawArc(RectF(curX - radius, h - bh - radius, curX + radius, h - bh + radius), 180f, 180f, false, scallPaint)
+                    curX += radius * 2
+                }
+            }
+
+            AestheticFrame.VINTAGE_STAMP -> {
+                val bw = w * 0.06f
+                val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(248, 246, 240)
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRect(0f, 0f, bw, h, borderPaint)
+                canvas.drawRect(w - bw, 0f, w, h, borderPaint)
+                canvas.drawRect(0f, 0f, w, bw, borderPaint)
+                canvas.drawRect(0f, h - bw, w, h, borderPaint)
+
+                val holePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.TRANSPARENT
+                    xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+                }
+                val step = w * 0.05f
+                val r = step * 0.28f
+                var x = step * 0.5f
+                while (x < w) {
+                    canvas.drawCircle(x, 0f, r, holePaint)
+                    canvas.drawCircle(x, h, r, holePaint)
+                    x += step
+                }
+                var y = step * 0.5f
+                while (y < h) {
+                    canvas.drawCircle(0f, y, r, holePaint)
+                    canvas.drawCircle(w, y, r, holePaint)
+                    y += step
+                }
+
+                val watermark = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.argb(60, 180, 80, 50)
+                    textSize = (w / 32f).coerceAtLeast(10f)
+                    typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+                }
+                canvas.drawText("PAR AVION • VENUSLY POST", w * 0.1f, h - bw * 0.35f, watermark)
+            }
+
+            AestheticFrame.FILM_SLIDE_MOUNT -> {
+                val borderLR = w * 0.08f
+                val borderTop = h * 0.08f
+                val borderBottom = h * 0.14f
+
+                val slidePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(240, 238, 230)
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRect(0f, 0f, borderLR, h, slidePaint)
+                canvas.drawRect(w - borderLR, 0f, w, h, slidePaint)
+                canvas.drawRect(0f, 0f, w, borderTop, slidePaint)
+                canvas.drawRect(0f, h - borderBottom, w, h, slidePaint)
+
+                val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(220, 38, 38)
+                    textSize = (w / 30f).coerceAtLeast(11f)
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                }
+                canvas.drawText("KODACHROME", borderLR, borderTop * 0.65f, labelPaint)
+
+                val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(71, 85, 105)
+                    textSize = (w / 38f).coerceAtLeast(10f)
+                    typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                }
+                canvas.drawText("SLIDE #24 • PROCESSED BY VENUSLY", borderLR, h - (borderBottom * 0.45f), subPaint)
+            }
+
+            AestheticFrame.GOLD_GLITTER_BORDER -> {
+                val bw = w * 0.045f
+                val goldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(251, 191, 36)
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRect(0f, 0f, bw, h, goldPaint)
+                canvas.drawRect(w - bw, 0f, w, h, goldPaint)
+                canvas.drawRect(0f, 0f, w, bw, goldPaint)
+                canvas.drawRect(0f, h - bw, w, h, goldPaint)
+
+                val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(180, 83, 9)
+                    style = Paint.Style.STROKE
+                    strokeWidth = (w / 300f).coerceAtLeast(2f)
+                }
+                canvas.drawRect(bw * 0.5f, bw * 0.5f, w - bw * 0.5f, h - bw * 0.5f, linePaint)
+            }
+
+            AestheticFrame.FLORAL_PASTEL_RIBBON -> {
+                val bw = w * 0.04f
+                val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(253, 242, 248)
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRect(0f, 0f, bw, h, bgPaint)
+                canvas.drawRect(w - bw, 0f, w, h, bgPaint)
+                canvas.drawRect(0f, 0f, w, bw, bgPaint)
+                canvas.drawRect(0f, h - bw, w, h, bgPaint)
+
+                val ribbonPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(244, 114, 182)
+                    textSize = (w / 22f).coerceAtLeast(14f)
+                }
+                canvas.drawText("🎀", bw * 0.5f, bw * 2.2f, ribbonPaint)
+                canvas.drawText("🎀", w - bw * 2.5f, bw * 2.2f, ribbonPaint)
+            }
+
+            AestheticFrame.PAPER_TEAR_SCRAPBOOK -> {
+                val bw = w * 0.05f
+                val paperPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.rgb(254, 252, 232)
+                    style = Paint.Style.FILL
+                }
+                canvas.drawRect(0f, 0f, bw, h, paperPaint)
+                canvas.drawRect(w - bw, 0f, w, h, paperPaint)
+                canvas.drawRect(0f, 0f, w, bw, paperPaint)
+                canvas.drawRect(0f, h - bw, w, h, paperPaint)
+
+                val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.argb(80, 161, 98, 7)
+                    style = Paint.Style.STROKE
+                    strokeWidth = 2f
+                }
+                canvas.drawRect(bw, bw, w - bw, h - bw, strokePaint)
+            }
         }
+    }
+
+    private fun applyNoiseReduction(source: Bitmap, intensity: Float): Bitmap {
+        if (intensity <= 0f) return source
+        val width = source.width
+        val height = source.height
+        val denoised = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+
+        val norm = (intensity / 100f).coerceIn(0f, 1f)
+        val threshold = 12f + norm * 50f
+        val smoothingFactor = norm * 0.85f
+
+        val pixels = IntArray(width * height)
+        val resultPixels = IntArray(width * height)
+        source.getPixels(pixels, 0, width, 0, 0, width, height)
+
+        for (y in 0 until height) {
+            val yMin = (y - 1).coerceAtLeast(0)
+            val yMax = (y + 1).coerceAtMost(height - 1)
+            for (x in 0 until width) {
+                val xMin = (x - 1).coerceAtLeast(0)
+                val xMax = (x + 1).coerceAtMost(width - 1)
+
+                val centerIdx = y * width + x
+                val centerPixel = pixels[centerIdx]
+                val cA = (centerPixel shr 24) and 0xFF
+                val cR = (centerPixel shr 16) and 0xFF
+                val cG = (centerPixel shr 8) and 0xFF
+                val cB = centerPixel and 0xFF
+
+                var sumR = 0f
+                var sumG = 0f
+                var sumB = 0f
+                var totalWeight = 0f
+
+                for (ny in yMin..yMax) {
+                    val rowIdx = ny * width
+                    for (nx in xMin..xMax) {
+                        val p = pixels[rowIdx + nx]
+                        val pR = (p shr 16) and 0xFF
+                        val pG = (p shr 8) and 0xFF
+                        val pB = p and 0xFF
+
+                        val diffR = (pR - cR).toFloat()
+                        val diffG = (pG - cG).toFloat()
+                        val diffB = (pB - cB).toFloat()
+                        val colorDiff = Math.sqrt((diffR * diffR + diffG * diffG + diffB * diffB).toDouble()).toFloat()
+
+                        val rangeWeight = Math.exp((- (colorDiff * colorDiff) / (2f * threshold * threshold)).toDouble()).toFloat()
+
+                        sumR += pR * rangeWeight
+                        sumG += pG * rangeWeight
+                        sumB += pB * rangeWeight
+                        totalWeight += rangeWeight
+                    }
+                }
+
+                if (totalWeight > 0f) {
+                    val smoothR = (sumR / totalWeight).coerceIn(0f, 255f)
+                    val smoothG = (sumG / totalWeight).coerceIn(0f, 255f)
+                    val smoothB = (sumB / totalWeight).coerceIn(0f, 255f)
+
+                    val finalR = (cR * (1f - smoothingFactor) + smoothR * smoothingFactor).toInt().coerceIn(0, 255)
+                    val finalG = (cG * (1f - smoothingFactor) + smoothG * smoothingFactor).toInt().coerceIn(0, 255)
+                    val finalB = (cB * (1f - smoothingFactor) + smoothB * smoothingFactor).toInt().coerceIn(0, 255)
+
+                    resultPixels[centerIdx] = (cA shl 24) or (finalR shl 16) or (finalG shl 8) or finalB
+                } else {
+                    resultPixels[centerIdx] = centerPixel
+                }
+            }
+        }
+
+        denoised.setPixels(resultPixels, 0, width, 0, 0, width, height)
+        return denoised
+    }
+
+    private fun applyPhotoCornerRoundingAndMatteFrame(
+        source: Bitmap,
+        cornerRadius: Float,
+        matteWidth: Float,
+        matteColorLong: Long
+    ): Bitmap {
+        if (cornerRadius <= 0f && matteWidth <= 0f) return source
+
+        val srcW = source.width
+        val srcH = source.height
+        val minDim = Math.min(srcW, srcH)
+
+        val normMatte = (matteWidth / 100f).coerceIn(0f, 0.40f)
+        val paddingPx = (minDim * 0.20f * normMatte).toInt()
+
+        val totalW = srcW + paddingPx * 2
+        val totalH = srcH + paddingPx * 2
+
+        val output = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+
+        val matteColorInt = matteColorLong.toInt()
+        val isTransparentMatte = (matteColorInt and 0xFF000000.toInt()) == 0
+
+        if (!isTransparentMatte) {
+            canvas.drawColor(matteColorInt)
+
+            if (paddingPx > 0) {
+                val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.BLACK
+                    alpha = 45
+                }
+                val normRadius = (cornerRadius / 100f).coerceIn(0f, 1f)
+                val maxRadius = minDim / 2f
+                val r = maxRadius * normRadius
+                val shadowRect = RectF(
+                    paddingPx.toFloat() - 2f,
+                    paddingPx.toFloat() + 2f,
+                    (paddingPx + srcW).toFloat() + 2f,
+                    (paddingPx + srcH).toFloat() + 4f
+                )
+                canvas.drawRoundRect(shadowRect, r, r, shadowPaint)
+            }
+        }
+
+        val normRadius = (cornerRadius / 100f).coerceIn(0f, 1f)
+        val maxRadius = minDim / 2f
+        val rx = maxRadius * normRadius
+
+        val photoRect = RectF(
+            paddingPx.toFloat(),
+            paddingPx.toFloat(),
+            (paddingPx + srcW).toFloat(),
+            (paddingPx + srcH).toFloat()
+        )
+
+        val clipPath = Path().apply {
+            addRoundRect(photoRect, rx, rx, Path.Direction.CW)
+        }
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+        canvas.save()
+        canvas.clipPath(clipPath)
+        canvas.drawBitmap(source, paddingPx.toFloat(), paddingPx.toFloat(), paint)
+        canvas.restore()
+
+        if (rx > 0f || paddingPx > 0) {
+            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = Math.max(2f, minDim * 0.0035f)
+                color = if (isTransparentMatte) Color.WHITE else Color.argb(45, 0, 0, 0)
+            }
+            canvas.drawRoundRect(photoRect, rx, rx, strokePaint)
+        }
+
+        return output
     }
 }

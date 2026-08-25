@@ -11,6 +11,9 @@ enum class PastelTheme(
     val containerColor: Color,
     val lightBgColor: Color,
     val darkBgColor: Color,
+    val lightSurfaceColor: Color,
+    val darkSurfaceColor: Color,
+    val darkSurfaceVariantColor: Color,
     val previewGradient: List<Color>
 ) {
     PASTEL_SKY(
@@ -21,7 +24,10 @@ enum class PastelTheme(
         accentColor = Color(0xFF60A5FA),
         containerColor = Color(0xFFE0EDFD),
         lightBgColor = Color(0xFFF5F8FC),
-        darkBgColor = Color(0xFF0B0F19),
+        darkBgColor = Color(0xFF0B1120),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF131D33),
+        darkSurfaceVariantColor = Color(0xFF1E2D4A),
         previewGradient = listOf(Color(0xFF2563EB), Color(0xFF60A5FA), Color(0xFFE0EDFD))
     ),
     SAKURA_ROSE(
@@ -31,8 +37,11 @@ enum class PastelTheme(
         primaryColor = Color(0xFFE11D48),
         accentColor = Color(0xFFFB7185),
         containerColor = Color(0xFFFCE7F3),
-        lightBgColor = Color(0xFFFFF1F2),
-        darkBgColor = Color(0xFF190B10),
+        lightBgColor = Color(0xFFFFF1F4),
+        darkBgColor = Color(0xFF1F0B13),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF2D121D),
+        darkSurfaceVariantColor = Color(0xFF3F1928),
         previewGradient = listOf(Color(0xFFE11D48), Color(0xFFFB7185), Color(0xFFFCE7F3))
     ),
     LAVENDER_MIST(
@@ -43,7 +52,10 @@ enum class PastelTheme(
         accentColor = Color(0xFFA78BFA),
         containerColor = Color(0xFFEDE9FE),
         lightBgColor = Color(0xFFF8F5FF),
-        darkBgColor = Color(0xFF130B1C),
+        darkBgColor = Color(0xFF140B21),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF201235),
+        darkSurfaceVariantColor = Color(0xFF2F1A4D),
         previewGradient = listOf(Color(0xFF7C3AED), Color(0xFFA78BFA), Color(0xFFEDE9FE))
     ),
     MATCHA_CREAM(
@@ -53,8 +65,11 @@ enum class PastelTheme(
         primaryColor = Color(0xFF059669),
         accentColor = Color(0xFF34D399),
         containerColor = Color(0xFFD1FAE5),
-        lightBgColor = Color(0xFFF0FDF4),
-        darkBgColor = Color(0xFF071710),
+        lightBgColor = Color(0xFFF0FDF5),
+        darkBgColor = Color(0xFF071C13),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF0E2A1D),
+        darkSurfaceVariantColor = Color(0xFF163C2B),
         previewGradient = listOf(Color(0xFF059669), Color(0xFF34D399), Color(0xFFD1FAE5))
     ),
     BUTTERCUP_PEACH(
@@ -65,7 +80,10 @@ enum class PastelTheme(
         accentColor = Color(0xFFFBBF24),
         containerColor = Color(0xFFFEF3C7),
         lightBgColor = Color(0xFFFFFBEB),
-        darkBgColor = Color(0xFF1C1307),
+        darkBgColor = Color(0xFF1F1407),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF2D1E0C),
+        darkSurfaceVariantColor = Color(0xFF402A10),
         previewGradient = listOf(Color(0xFFD97706), Color(0xFFFBBF24), Color(0xFFFEF3C7))
     ),
     LILAC_CLOUD(
@@ -76,7 +94,10 @@ enum class PastelTheme(
         accentColor = Color(0xFFC084FC),
         containerColor = Color(0xFFF3E8FF),
         lightBgColor = Color(0xFFFAF5FF),
-        darkBgColor = Color(0xFF160B1F),
+        darkBgColor = Color(0xFF170B24),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF241238),
+        darkSurfaceVariantColor = Color(0xFF351A52),
         previewGradient = listOf(Color(0xFF9333EA), Color(0xFFC084FC), Color(0xFFF3E8FF))
     ),
     SUNSET_CORAL(
@@ -87,7 +108,10 @@ enum class PastelTheme(
         accentColor = Color(0xFFFB923C),
         containerColor = Color(0xFFFFEDD5),
         lightBgColor = Color(0xFFFFF7ED),
-        darkBgColor = Color(0xFF1C0F07),
+        darkBgColor = Color(0xFF210E07),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF2E150C),
+        darkSurfaceVariantColor = Color(0xFF421E12),
         previewGradient = listOf(Color(0xFFEA580C), Color(0xFFFB923C), Color(0xFFFFEDD5))
     ),
     ARCTIC_GLACIER(
@@ -98,7 +122,10 @@ enum class PastelTheme(
         accentColor = Color(0xFF38BDF8),
         containerColor = Color(0xFFCFFAFE),
         lightBgColor = Color(0xFFF0F9FF),
-        darkBgColor = Color(0xFF07131C),
+        darkBgColor = Color(0xFF071521),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF0D2133),
+        darkSurfaceVariantColor = Color(0xFF14304A),
         previewGradient = listOf(Color(0xFF0284C7), Color(0xFF38BDF8), Color(0xFFCFFAFE))
     ),
     ROSE_QUARTZ(
@@ -109,7 +136,10 @@ enum class PastelTheme(
         accentColor = Color(0xFFF472B6),
         containerColor = Color(0xFFFDF2F8),
         lightBgColor = Color(0xFFFFF5F9),
-        darkBgColor = Color(0xFF1C0913),
+        darkBgColor = Color(0xFF210A17),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF2F0F22),
+        darkSurfaceVariantColor = Color(0xFF421731),
         previewGradient = listOf(Color(0xFFDB2777), Color(0xFFF472B6), Color(0xFFFDF2F8))
     ),
     ESPRESSO_CREAM(
@@ -120,7 +150,66 @@ enum class PastelTheme(
         accentColor = Color(0xFFB45309),
         containerColor = Color(0xFFFEF2F2),
         lightBgColor = Color(0xFFFAF6F0),
-        darkBgColor = Color(0xFF19120C),
+        darkBgColor = Color(0xFF1D140D),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF2B1E14),
+        darkSurfaceVariantColor = Color(0xFF3D2A1C),
         previewGradient = listOf(Color(0xFF92400E), Color(0xFFB45309), Color(0xFFFEF2F2))
+    ),
+    PISTACHIO_MILK(
+        id = "pistachio",
+        displayName = "Pistachio Milk",
+        subtitle = "Cool Pistachio & Celadon",
+        primaryColor = Color(0xFF15803D),
+        accentColor = Color(0xFF4ADE80),
+        containerColor = Color(0xFFDCFCE7),
+        lightBgColor = Color(0xFFF2FBF5),
+        darkBgColor = Color(0xFF081C10),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF102B1A),
+        darkSurfaceVariantColor = Color(0xFF183D26),
+        previewGradient = listOf(Color(0xFF15803D), Color(0xFF4ADE80), Color(0xFFDCFCE7))
+    ),
+    Y2K_CYBER_PASTEL(
+        id = "y2k_cyber",
+        displayName = "Y2K Cyber Hologram",
+        subtitle = "Iridescent Pink & Neon Cyan",
+        primaryColor = Color(0xFFD946EF),
+        accentColor = Color(0xFF06B6D4),
+        containerColor = Color(0xFFFAE8FF),
+        lightBgColor = Color(0xFFFAF5FF),
+        darkBgColor = Color(0xFF180A24),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF271039),
+        darkSurfaceVariantColor = Color(0xFF381752),
+        previewGradient = listOf(Color(0xFFD946EF), Color(0xFF06B6D4), Color(0xFFFAE8FF))
+    ),
+    VANILLA_LATTE(
+        id = "vanilla_latte",
+        displayName = "Vanilla Latte",
+        subtitle = "Warm Oat & Buttercream",
+        primaryColor = Color(0xFFB45309),
+        accentColor = Color(0xFFF59E0B),
+        containerColor = Color(0xFFFEF3C7),
+        lightBgColor = Color(0xFFFAF7F2),
+        darkBgColor = Color(0xFF1E1710),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF2A2118),
+        darkSurfaceVariantColor = Color(0xFF3D3023),
+        previewGradient = listOf(Color(0xFFB45309), Color(0xFFF59E0B), Color(0xFFFEF3C7))
+    ),
+    MIDNIGHT_INDIGO(
+        id = "midnight_indigo",
+        displayName = "Midnight Indigo",
+        subtitle = "Deep Twilight Navy & Periwinkle",
+        primaryColor = Color(0xFF4F46E5),
+        accentColor = Color(0xFF818CF8),
+        containerColor = Color(0xFFE0E7FF),
+        lightBgColor = Color(0xFFF5F7FF),
+        darkBgColor = Color(0xFF0D1026),
+        lightSurfaceColor = Color(0xFFFFFFFF),
+        darkSurfaceColor = Color(0xFF161A3B),
+        darkSurfaceVariantColor = Color(0xFF212757),
+        previewGradient = listOf(Color(0xFF4F46E5), Color(0xFF818CF8), Color(0xFFE0E7FF))
     )
 }

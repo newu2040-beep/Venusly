@@ -20,8 +20,11 @@ import com.example.model.AdjustmentValues
 import com.example.model.AestheticFrame
 import com.example.model.CropAspectRatio
 import com.example.model.EditorTab
+import com.example.model.ExportFormatOption
+import com.example.model.ExportResolution
 import com.example.model.FilterCategory
 import com.example.model.FilterPreset
+import com.example.model.GridOverlayMode
 import com.example.model.StickerOverlay
 import com.example.model.TextOverlay
 import kotlinx.coroutines.Job
@@ -76,6 +79,19 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _stickers = MutableStateFlow<List<StickerOverlay>>(emptyList())
     val stickers: StateFlow<List<StickerOverlay>> = _stickers.asStateFlow()
+
+    private val _gridOverlayMode = MutableStateFlow(GridOverlayMode.OFF)
+    val gridOverlayMode: StateFlow<GridOverlayMode> = _gridOverlayMode.asStateFlow()
+
+    fun cycleGridOverlayMode() {
+        val modes = GridOverlayMode.values()
+        val nextIndex = (_gridOverlayMode.value.ordinal + 1) % modes.size
+        _gridOverlayMode.value = modes[nextIndex]
+    }
+
+    fun setGridOverlayMode(mode: GridOverlayMode) {
+        _gridOverlayMode.value = mode
+    }
 
     private val _currentImageUri = MutableStateFlow<String?>(null)
     val currentImageUri: StateFlow<String?> = _currentImageUri.asStateFlow()
@@ -278,18 +294,79 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         triggerRender()
     }
 
+    private val _selectedStickerId = MutableStateFlow<String?>(null)
+    val selectedStickerId: StateFlow<String?> = _selectedStickerId.asStateFlow()
+
+    fun selectSticker(id: String?) {
+        _selectedStickerId.value = id
+    }
+
     fun addSticker(symbol: String) {
         val newSticker = StickerOverlay(
             symbol = symbol,
             xPercent = 0.5f,
-            yPercent = 0.5f
+            yPercent = 0.5f,
+            sizeDp = 56f
         )
         _stickers.value = _stickers.value + newSticker
+        _selectedStickerId.value = newSticker.id
         triggerRender()
     }
 
     fun removeSticker(id: String) {
         _stickers.value = _stickers.value.filter { it.id != id }
+        if (_selectedStickerId.value == id) {
+            _selectedStickerId.value = null
+        }
+        triggerRender()
+    }
+
+    fun duplicateSticker(id: String) {
+        val existing = _stickers.value.find { it.id == id } ?: return
+        val copied = existing.copy(
+            id = java.util.UUID.randomUUID().toString(),
+            xPercent = (existing.xPercent + 0.05f).coerceAtMost(0.9f),
+            yPercent = (existing.yPercent + 0.05f).coerceAtMost(0.9f)
+        )
+        _stickers.value = _stickers.value + copied
+        _selectedStickerId.value = copied.id
+        triggerRender()
+    }
+
+    fun updateStickerPosition(id: String, xPercent: Float, yPercent: Float) {
+        _stickers.value = _stickers.value.map {
+            if (it.id == id) {
+                it.copy(
+                    xPercent = xPercent.coerceIn(0.05f, 0.95f),
+                    yPercent = yPercent.coerceIn(0.05f, 0.95f)
+                )
+            } else it
+        }
+        triggerRender()
+    }
+
+    fun updateStickerScale(id: String, deltaScale: Float) {
+        _stickers.value = _stickers.value.map {
+            if (it.id == id) {
+                val newSize = (it.sizeDp * deltaScale).coerceIn(24f, 200f)
+                it.copy(sizeDp = newSize)
+            } else it
+        }
+        triggerRender()
+    }
+
+    fun updateStickerRotation(id: String, deltaDegrees: Float) {
+        _stickers.value = _stickers.value.map {
+            if (it.id == id) {
+                it.copy(rotation = (it.rotation + deltaDegrees) % 360f)
+            } else it
+        }
+        triggerRender()
+    }
+
+    fun bringStickerToFront(id: String) {
+        val target = _stickers.value.find { it.id == id } ?: return
+        _stickers.value = _stickers.value.filter { it.id != id } + target
         triggerRender()
     }
 
@@ -404,9 +481,31 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private val _exportResolution = MutableStateFlow(ExportResolution.ORIGINAL)
+    val exportResolution: StateFlow<ExportResolution> = _exportResolution.asStateFlow()
+
+    private val _exportFormat = MutableStateFlow(ExportFormatOption.JPEG)
+    val exportFormat: StateFlow<ExportFormatOption> = _exportFormat.asStateFlow()
+
+    private val _exportQuality = MutableStateFlow(95)
+    val exportQuality: StateFlow<Int> = _exportQuality.asStateFlow()
+
+    fun setExportResolution(resolution: ExportResolution) {
+        _exportResolution.value = resolution
+    }
+
+    fun setExportFormat(format: ExportFormatOption) {
+        _exportFormat.value = format
+    }
+
+    fun setExportQuality(quality: Int) {
+        _exportQuality.value = quality.coerceIn(50, 100)
+    }
+
     suspend fun exportImage(
-        format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG,
-        quality: Int = 95
+        format: Bitmap.CompressFormat = _exportFormat.value.format,
+        quality: Int = _exportQuality.value,
+        resolution: Int = _exportResolution.value.maxDimension
     ): Uri? {
         val bitmapToExport = _processedBitmap.value ?: return null
         val uri = BitmapUtils.saveBitmapToGallery(
@@ -414,15 +513,16 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             bitmap = bitmapToExport,
             format = format,
             quality = quality,
+            targetResolution = resolution,
             title = "Venusly_${System.currentTimeMillis()}"
         )
         if (uri != null) {
-            _exportStatusMessage.value = "Saved to Gallery in High Quality ✨"
+            _exportStatusMessage.value = "Saved to Gallery in Ultra High Quality ✨"
             NotificationHelper.showExportSuccessNotification(
                 context = getApplication(),
                 imageUri = uri,
                 title = "Photo Saved to Gallery ✨",
-                message = "Your high-resolution aesthetic photo is ready to share!"
+                message = "Your ultra high-resolution aesthetic photo is ready to share!"
             )
         } else {
             _exportStatusMessage.value = "Export failed. Check storage permissions."

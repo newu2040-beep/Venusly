@@ -118,6 +118,15 @@ fun HomeScreen(
         }
     }
 
+    val rawPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            editorViewModel.loadImageFromUri(uri)
+            onNavigateToEdit()
+        }
+    }
+
     val filteredPresets = if (selectedCategory == FilterCategory.ALL) {
         DefaultPresets.presets
     } else {
@@ -223,7 +232,7 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     QuickActionCard(
                         title = "Import",
@@ -232,6 +241,14 @@ fun HomeScreen(
                             photoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    QuickActionCard(
+                        title = "RAW DNG",
+                        icon = Icons.Filled.MotionPhotosOn,
+                        onClick = {
+                            rawPickerLauncher.launch("image/*")
                         },
                         modifier = Modifier.weight(1f)
                     )
@@ -247,12 +264,6 @@ fun HomeScreen(
                         onClick = {
                             onNavigateToPresets(DefaultPresets.presets.first())
                         },
-                        modifier = Modifier.weight(1f)
-                    )
-                    QuickActionCard(
-                        title = "Edit",
-                        icon = Icons.Filled.Edit,
-                        onClick = onNavigateToEdit,
                         modifier = Modifier.weight(1f)
                     )
                 }
