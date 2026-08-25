@@ -86,6 +86,9 @@ enum class ExportFormatOption(val displayName: String, val subtitle: String, val
 
 enum class FilterCategory(val displayName: String) {
     ALL("All"),
+    DIGITAL_CAMERA("Digital Camera"),
+    VINTAGE_CAMERA("Old Camera"),
+    SPECIAL_LOOKS("Special Looks"),
     FUJI_FILM("Fuji Film"),
     RETRO("Retro"),
     DREAMY("Dreamy"),
@@ -112,22 +115,26 @@ data class TextOverlay(
     val text: String = "VENUSLY",
     val xPercent: Float = 0.5f,
     val yPercent: Float = 0.85f,
-    val fontSizeSp: Float = 18f,
+    val fontSizeSp: Float = 20f,
     val colorHex: String = "#FFFFFF",
-    val fontStyle: String = "Serif",
+    val fontStyle: String = "Serif", // "Serif", "SansSerif", "Monospace", "Cursive", "DisplayBold"
     val hasBackgroundPill: Boolean = true,
-    val isDateStamp: Boolean = false
+    val isDateStamp: Boolean = false,
+    val rotation: Float = 0f,
+    val blendMode: String = "Normal" // "Normal", "Multiply", "Screen", "Overlay", "Darken", "Lighten", "ColorDodge", "Difference"
 )
 
 data class StickerOverlay(
     val id: String = java.util.UUID.randomUUID().toString(),
     val symbol: String = "✨",
+    val customImageUri: String? = null,
     val xPercent: Float = 0.5f,
     val yPercent: Float = 0.5f,
-    val sizeDp: Float = 52f,
+    val sizeDp: Float = 56f,
     val rotation: Float = 0f,
     val tintColorHex: String? = null,
-    val alpha: Float = 1.0f
+    val alpha: Float = 1.0f,
+    val blendMode: String = "Normal" // "Normal", "Multiply", "Screen", "Overlay", "Darken", "Lighten", "ColorDodge", "Difference"
 )
 
 enum class EditorTab(val title: String) {
@@ -157,3 +164,39 @@ enum class CropAspectRatio(val displayName: String, val ratio: Float?) {
     LANDSCAPE_16_9("16:9", 1.777f),
     CLASSIC_2_3("2:3", 0.666f)
 }
+
+enum class LayerType(val displayName: String) {
+    BASE_IMAGE("Base Photo"),
+    ADJUSTMENTS("Color & Filter Stack"),
+    GRAIN_LIGHT_LEAK("Grain & Light Effects"),
+    FRAME("Frame & Borders"),
+    STICKER("Sticker"),
+    TEXT_OVERLAY("Text / Date Stamp")
+}
+
+data class LayerItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val type: LayerType,
+    val name: String,
+    val isVisible: Boolean = true,
+    val opacity: Float = 1.0f,
+    val isLocked: Boolean = false,
+    val associatedId: String? = null
+)
+
+enum class BatchItemStatus {
+    PENDING,
+    PROCESSING,
+    COMPLETED,
+    FAILED
+}
+
+data class BatchProcessingItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val uri: android.net.Uri,
+    val thumbnailBitmap: android.graphics.Bitmap? = null,
+    val status: BatchItemStatus = BatchItemStatus.PENDING,
+    val resultUri: android.net.Uri? = null,
+    val errorMessage: String? = null
+)
+

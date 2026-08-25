@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.net.Uri
+import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,10 +31,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MotionPhotosOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Upload
+import com.example.ui.components.BatchProcessingSheet
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -108,6 +111,34 @@ fun HomeScreen(
 
     var showPermissionsDialog by remember { mutableStateOf(false) }
     var permissionsGranted by remember { mutableStateOf(PermissionUtils.isAllGranted(context)) }
+    var showBatchSheet by remember { mutableStateOf(false) }
+
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val nativeCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success && tempCameraUri != null) {
+            editorViewModel.loadImageFromUri(tempCameraUri!!)
+            onNavigateToEdit()
+        }
+    }
+
+    fun launchNativeCameraApp() {
+        try {
+            val photoFile = File(context.cacheDir, "native_camera_${System.currentTimeMillis()}.jpg")
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                photoFile
+            )
+            tempCameraUri = uri
+            nativeCameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            onNavigateToCamera()
+        }
+    }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -255,7 +286,13 @@ fun HomeScreen(
                     QuickActionCard(
                         title = "Camera",
                         icon = Icons.Filled.CameraAlt,
-                        onClick = onNavigateToCamera,
+                        onClick = { launchNativeCameraApp() },
+                        modifier = Modifier.weight(1f)
+                    )
+                    QuickActionCard(
+                        title = "Batch",
+                        icon = Icons.Filled.Collections,
+                        onClick = { showBatchSheet = true },
                         modifier = Modifier.weight(1f)
                     )
                     QuickActionCard(
@@ -476,6 +513,13 @@ fun HomeScreen(
             onPermissionsGranted = {
                 permissionsGranted = true
             }
+        )
+    }
+
+    if (showBatchSheet) {
+        BatchProcessingSheet(
+            editorViewModel = editorViewModel,
+            onDismiss = { showBatchSheet = false }
         )
     }
 }

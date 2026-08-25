@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
@@ -95,6 +96,33 @@ fun CameraScreen(
     LaunchedEffect(Unit) {
         if (!cameraPermissionState.status.isGranted) {
             cameraPermissionState.launchPermissionRequest()
+        }
+    }
+
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val nativeCameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success && tempCameraUri != null) {
+            editorViewModel.loadImageFromUri(tempCameraUri!!)
+            onPhotoCaptured()
+        }
+    }
+
+    fun launchNativeCameraApp() {
+        try {
+            val photoFile = File(context.cacheDir, "native_camera_${System.currentTimeMillis()}.jpg")
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                photoFile
+            )
+            tempCameraUri = uri
+            nativeCameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(context, "Opening Native Camera...", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -206,7 +234,7 @@ fun CameraScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Top Controls: Back, Flash, Grid, Switch Camera
+        // Top Controls: Back, Native HD Camera, Flash, Switch Camera
         Row(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -227,6 +255,16 @@ fun CameraScreen(
                     contentDescription = "Back",
                     tint = Color.White
                 )
+            }
+
+            Button(
+                onClick = { launchNativeCameraApp() },
+                colors = ButtonDefaults.buttonColors(containerColor = VenuslyBlue),
+                shape = CircleShape
+            ) {
+                Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Native HD Camera", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

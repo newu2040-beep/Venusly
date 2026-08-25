@@ -18,11 +18,16 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
+import coil.compose.AsyncImage
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material3.Surface
+import com.example.model.CropAspectRatio
+import com.example.ui.theme.VenuslyBlue
+import com.example.ui.theme.VenuslyBlueContainer
 import com.example.model.StickerOverlay
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +56,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BlurOn
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.CropPortrait
@@ -63,6 +69,9 @@ import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.FormatColorFill
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.Layers
+import com.example.ui.components.BatchProcessingSheet
+import com.example.ui.components.LayersSheet
 import androidx.compose.material.icons.filled.MotionPhotosOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
@@ -157,10 +166,15 @@ fun EditorScreen(
     val exportMsg by editorViewModel.exportStatusMessage.collectAsState()
     val stickers by editorViewModel.stickers.collectAsState()
     val selectedStickerId by editorViewModel.selectedStickerId.collectAsState()
+    val textOverlays by editorViewModel.textOverlays.collectAsState()
+    val selectedTextOverlayId by editorViewModel.selectedTextOverlayId.collectAsState()
     val gridOverlayMode by editorViewModel.gridOverlayMode.collectAsState()
     val isCompactMode = LocalCompactMode.current
 
     var showExportSheet by remember { mutableStateOf(false) }
+    var showCropSheet by remember { mutableStateOf(false) }
+    var showLayersSheet by remember { mutableStateOf(false) }
+    var showBatchSheet by remember { mutableStateOf(false) }
     var exportQuality by remember { mutableFloatStateOf(95f) }
     var exportFormatPng by remember { mutableStateOf(false) }
     var showTextDialog by remember { mutableStateOf(false) }
@@ -171,6 +185,14 @@ fun EditorScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             editorViewModel.loadImageFromUri(uri)
+        }
+    }
+
+    val stickerPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            editorViewModel.addCustomStickerImage(uri.toString())
         }
     }
 
@@ -227,6 +249,28 @@ fun EditorScreen(
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                IconButton(
+                    onClick = { showLayersSheet = true },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Layers,
+                        contentDescription = "Layers",
+                        tint = VenuslyBlue
+                    )
+                }
+
+                IconButton(
+                    onClick = { showBatchSheet = true },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Collections,
+                        contentDescription = "Batch Edit",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
                 IconButton(
                     onClick = { editorViewModel.undo() },
                     enabled = canUndo,
@@ -326,15 +370,22 @@ fun EditorScreen(
                                         (yPx - stkSizePx / 2f).toInt()
                                     )
                                 }
-                                .graphicsLayer { rotationZ = sticker.rotation }
+                                .graphicsLayer {
+                                    rotationZ = sticker.rotation
+                                    alpha = sticker.alpha
+                                }
                                 .pointerInput(sticker.id) {
                                     detectTapGestures {
                                         editorViewModel.selectSticker(sticker.id)
+                                        editorViewModel.selectTextOverlay(null)
                                     }
                                 }
                                 .pointerInput(sticker.id) {
                                     detectDragGestures(
-                                        onDragStart = { editorViewModel.selectSticker(sticker.id) },
+                                        onDragStart = {
+                                            editorViewModel.selectSticker(sticker.id)
+                                            editorViewModel.selectTextOverlay(null)
+                                        },
                                         onDrag = { change, dragAmount ->
                                             change.consume()
                                             val newX = (xPx + dragAmount.x) / containerWidthPx
@@ -346,16 +397,104 @@ fun EditorScreen(
                                 .then(
                                     if (isSelected) {
                                         Modifier
-                                            .border(2.dp, Color(0xFFEC4899), RoundedCornerShape(12.dp))
-                                            .background(Color(0x33EC4899), RoundedCornerShape(12.dp))
+                                            .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
                                     } else Modifier
                                 )
                                 .padding(4.dp),
                             contentAlignment = Alignment.Center
                         ) {
+                            if (sticker.customImageUri != null) {
+                                AsyncImage(
+                                    model = sticker.customImageUri,
+                                    contentDescription = "Custom Sticker",
+                                    modifier = Modifier.size(sticker.sizeDp.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Text(
+                                    text = sticker.symbol,
+                                    fontSize = (sticker.sizeDp * 0.7f).sp
+                                )
+                            }
+                        }
+                    }
+
+                    // Interactive Text Overlays on Canvas
+                    textOverlays.forEach { overlay ->
+                        val isSelected = overlay.id == selectedTextOverlayId
+                        val xPx = overlay.xPercent * containerWidthPx
+                        val yPx = overlay.yPercent * containerHeightPx
+
+                        val fontFam = when (overlay.fontStyle.uppercase()) {
+                            "SERIF" -> androidx.compose.ui.text.font.FontFamily.Serif
+                            "SANS", "SANSSERIF" -> androidx.compose.ui.text.font.FontFamily.SansSerif
+                            "MONOSPACE" -> androidx.compose.ui.text.font.FontFamily.Monospace
+                            "CURSIVE" -> androidx.compose.ui.text.font.FontFamily.Cursive
+                            else -> androidx.compose.ui.text.font.FontFamily.Default
+                        }
+
+                        val textColor = try {
+                            Color(android.graphics.Color.parseColor(overlay.colorHex))
+                        } catch (e: Exception) {
+                            if (overlay.isDateStamp) Color(0xFFFF9500) else Color.White
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        (xPx - 80f).toInt(),
+                                        (yPx - 20f).toInt()
+                                    )
+                                }
+                                .graphicsLayer { rotationZ = overlay.rotation }
+                                .pointerInput(overlay.id) {
+                                    detectTapGestures {
+                                        editorViewModel.selectTextOverlay(overlay.id)
+                                        editorViewModel.selectSticker(null)
+                                    }
+                                }
+                                .pointerInput(overlay.id) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            editorViewModel.selectTextOverlay(overlay.id)
+                                            editorViewModel.selectSticker(null)
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            val newX = (xPx + dragAmount.x) / containerWidthPx
+                                            val newY = (yPx + dragAmount.y) / containerHeightPx
+                                            editorViewModel.updateTextPosition(overlay.id, newX, newY)
+                                        }
+                                    )
+                                }
+                                .then(
+                                    if (isSelected) {
+                                        Modifier
+                                            .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(10.dp))
+                                    } else Modifier
+                                )
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (overlay.hasBackgroundPill && !overlay.isDateStamp) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0x99141B2D))
+                                )
+                            }
                             Text(
-                                text = sticker.symbol,
-                                fontSize = (sticker.sizeDp * 0.7f).sp
+                                text = overlay.text,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontFamily = fontFam,
+                                    fontWeight = if (overlay.isDateStamp) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = overlay.fontSizeSp.sp
+                                ),
+                                color = textColor
                             )
                         }
                     }
@@ -1043,7 +1182,7 @@ fun EditorScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "Smooth out photo corners and set perfectly in framed matte borders (v2.5.0)",
+                                    text = "Smooth out photo corners and set perfectly in framed matte borders (v3.0.0)",
                                     style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
@@ -1404,98 +1543,197 @@ fun EditorScreen(
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(MaterialTheme.colorScheme.surface)
                                 .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text(
-                                text = "Aesthetic Overlays & Interactive Stickers",
+                                text = "Aesthetic Overlays, Text & Custom Asset Imports",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
 
-                            // Active Selected Sticker Action Toolbar
-                            if (selectedStickerId != null) {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                                    shape = RoundedCornerShape(14.dp)
+                            // Quick Action Buttons (Add Text, Date Stamp, Custom PNG Sticker Import)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { showTextDialog = true },
+                                    shape = CircleShape,
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier.weight(1f)
                                 ) {
-                                    Column(modifier = Modifier.padding(10.dp)) {
-                                        Text(
-                                            text = "Active Sticker Controls",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = MaterialTheme.colorScheme.primary
+                                    Icon(Icons.Filled.TextFields, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Add Text", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = { editorViewModel.addDateStamp() },
+                                    shape = CircleShape,
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Filled.DateRange, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("'98 Date", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        stickerPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                         )
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceEvenly,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            IconButton(
-                                                onClick = { editorViewModel.duplicateSticker(selectedStickerId!!) },
-                                                modifier = Modifier.size(36.dp)
+                                    },
+                                    shape = CircleShape,
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer),
+                                    modifier = Modifier.weight(1.1f)
+                                ) {
+                                    Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Import PNG", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            // Active Selected Text Controls
+                            if (selectedTextOverlayId != null) {
+                                val activeText = textOverlays.find { it.id == selectedTextOverlayId }
+                                if (activeText != null) {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
+                                        shape = RoundedCornerShape(16.dp)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(Icons.Filled.ContentCopy, contentDescription = "Duplicate / Copy", tint = MaterialTheme.colorScheme.primary)
+                                                Text(
+                                                    text = "Active Text: \"${activeText.text.take(16)}\"",
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Row {
+                                                    IconButton(
+                                                        onClick = { editorViewModel.duplicateTextOverlay(activeText.id) },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(Icons.Filled.ContentCopy, contentDescription = "Duplicate", tint = MaterialTheme.colorScheme.primary)
+                                                    }
+                                                    IconButton(
+                                                        onClick = { editorViewModel.removeTextOverlay(activeText.id) },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                                                    }
+                                                }
                                             }
-                                            IconButton(
-                                                onClick = { editorViewModel.updateStickerScale(selectedStickerId!!, 1.2f) },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(Icons.Filled.ZoomIn, contentDescription = "Scale Up", tint = MaterialTheme.colorScheme.primary)
+
+                                            // Font Style Selector
+                                            Text("Font Style", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold))
+                                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                val fonts = listOf("Serif", "SansSerif", "Monospace", "Cursive", "DisplayBold")
+                                                items(fonts) { font ->
+                                                    val isSelected = activeText.fontStyle.equals(font, ignoreCase = true)
+                                                    FilterChip(
+                                                        selected = isSelected,
+                                                        onClick = { editorViewModel.updateTextOverlayProperties(activeText.id, fontStyle = font) },
+                                                        label = { Text(font, fontSize = 11.sp) },
+                                                        shape = CircleShape
+                                                    )
+                                                }
                                             }
-                                            IconButton(
-                                                onClick = { editorViewModel.updateStickerScale(selectedStickerId!!, 0.8f) },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(Icons.Filled.ZoomOut, contentDescription = "Scale Down", tint = MaterialTheme.colorScheme.primary)
-                                            }
-                                            IconButton(
-                                                onClick = { editorViewModel.updateStickerRotation(selectedStickerId!!, 30f) },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(Icons.Filled.Rotate90DegreesCw, contentDescription = "Rotate", tint = MaterialTheme.colorScheme.primary)
-                                            }
-                                            IconButton(
-                                                onClick = { editorViewModel.bringStickerToFront(selectedStickerId!!) },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(Icons.Filled.VerticalAlignTop, contentDescription = "Bring to Front", tint = MaterialTheme.colorScheme.primary)
-                                            }
-                                            IconButton(
-                                                onClick = { editorViewModel.removeSticker(selectedStickerId!!) },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+
+                                            // Blending Mode Selector
+                                            Text("Blend Mode", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold))
+                                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                val blendModes = listOf("Normal", "Multiply", "Screen", "Overlay", "Darken", "Lighten", "Difference")
+                                                items(blendModes) { mode ->
+                                                    val isSelected = activeText.blendMode.equals(mode, ignoreCase = true)
+                                                    FilterChip(
+                                                        selected = isSelected,
+                                                        onClick = { editorViewModel.updateTextOverlayProperties(activeText.id, blendMode = mode) },
+                                                        label = { Text(mode, fontSize = 11.sp) },
+                                                        shape = CircleShape
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = { editorViewModel.addDateStamp() },
-                                    shape = CircleShape,
-                                    colors = ButtonDefaults.buttonColors(containerColor = VenuslyBlue),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Filled.DateRange, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("'98 Date", fontSize = 12.sp)
-                                }
+                            // Active Selected Sticker Action Toolbar
+                            if (selectedStickerId != null) {
+                                val activeStk = stickers.find { it.id == selectedStickerId }
+                                if (activeStk != null) {
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                        shape = RoundedCornerShape(16.dp)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "Active Sticker Controls",
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    IconButton(
+                                                        onClick = { editorViewModel.duplicateSticker(selectedStickerId!!) },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(Icons.Filled.ContentCopy, contentDescription = "Duplicate", tint = MaterialTheme.colorScheme.primary)
+                                                    }
+                                                    IconButton(
+                                                        onClick = { editorViewModel.updateStickerScale(selectedStickerId!!, 1.2f) },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(Icons.Filled.ZoomIn, contentDescription = "Enlarge", tint = MaterialTheme.colorScheme.primary)
+                                                    }
+                                                    IconButton(
+                                                        onClick = { editorViewModel.updateStickerScale(selectedStickerId!!, 0.8f) },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(Icons.Filled.ZoomOut, contentDescription = "Shrink", tint = MaterialTheme.colorScheme.primary)
+                                                    }
+                                                    IconButton(
+                                                        onClick = { editorViewModel.updateStickerRotation(selectedStickerId!!, 30f) },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(Icons.Filled.Rotate90DegreesCw, contentDescription = "Rotate", tint = MaterialTheme.colorScheme.primary)
+                                                    }
+                                                    IconButton(
+                                                        onClick = { editorViewModel.removeSticker(selectedStickerId!!) },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                                                    }
+                                                }
+                                            }
 
-                                Button(
-                                    onClick = { showTextDialog = true },
-                                    shape = CircleShape,
-                                    colors = ButtonDefaults.buttonColors(containerColor = VenuslyBlueLight),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Filled.TextFields, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Add Text", fontSize = 12.sp)
+                                            // Sticker Blend Mode Selector
+                                            Text("Sticker Blend Mode", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold))
+                                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                val blendModes = listOf("Normal", "Multiply", "Screen", "Overlay", "Darken", "Lighten", "Difference")
+                                                items(blendModes) { mode ->
+                                                    val isSelected = activeStk.blendMode.equals(mode, ignoreCase = true)
+                                                    FilterChip(
+                                                        selected = isSelected,
+                                                        onClick = { editorViewModel.updateStickerProperties(activeStk.id, blendMode = mode) },
+                                                        label = { Text(mode, fontSize = 11.sp) },
+                                                        shape = CircleShape
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -1530,7 +1768,7 @@ fun EditorScreen(
             }
         }
 
-        // 5. Quick Tools Icon Row (Crop, Rotate, Flip, Sharpen, Vignette, Reset)
+        // 5. Quick Tools Icon Row (Crop, Rotate, Flip, Sharpen, Glow, Reset)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1538,6 +1776,11 @@ fun EditorScreen(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            EditorToolIconButton(
+                icon = Icons.Filled.Crop,
+                label = "Smart Crop",
+                onClick = { showCropSheet = true }
+            )
             EditorToolIconButton(
                 icon = Icons.Filled.Rotate90DegreesCw,
                 label = "Rotate",
@@ -1798,6 +2041,129 @@ fun EditorScreen(
         }
     }
 
+    // Smart Auto-Crop & Subject Framing Modal Bottom Sheet
+    if (showCropSheet) {
+        val scope = rememberCoroutineScope()
+        ModalBottomSheet(
+            onDismissRequest = { showCropSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Smart Auto-Crop & Framing ✨",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Face detection automatically centers portraits & subjects",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(VenuslyBlueContainer)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "Face AI",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = VenuslyBlue
+                            )
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.AutoAwesome,
+                            contentDescription = null,
+                            tint = VenuslyBlue,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Select an aspect ratio below. Smart Crop will automatically locate eyes, facial features, or spatial energy to center your subject perfectly.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "CHOOSE ASPECT RATIO",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+
+                val cropRatios = listOf(
+                    CropAspectRatio.SQUARE_1_1,
+                    CropAspectRatio.PORTRAIT_4_5,
+                    CropAspectRatio.STORY_9_16,
+                    CropAspectRatio.PHOTO_3_4,
+                    CropAspectRatio.LANDSCAPE_16_9,
+                    CropAspectRatio.CLASSIC_2_3
+                )
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(cropRatios) { ratioItem ->
+                        val ratioVal = ratioItem.ratio ?: 1.0f
+                        OutlinedButton(
+                            onClick = {
+                                editorViewModel.performSmartAutoCrop(ratioVal)
+                                showCropSheet = false
+                                Toast.makeText(context, "Smart Auto-Cropped to ${ratioItem.displayName} ✨", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.height(56.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = ratioItem.displayName,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                                Text(
+                                    text = "Auto Frame",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+    }
+
     // Add Text Dialog
     if (showTextDialog) {
         AlertDialog(
@@ -1830,6 +2196,20 @@ fun EditorScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    if (showLayersSheet) {
+        LayersSheet(
+            editorViewModel = editorViewModel,
+            onDismiss = { showLayersSheet = false }
+        )
+    }
+
+    if (showBatchSheet) {
+        BatchProcessingSheet(
+            editorViewModel = editorViewModel,
+            onDismiss = { showBatchSheet = false }
         )
     }
 }

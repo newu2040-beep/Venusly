@@ -18,6 +18,8 @@ import android.graphics.SweepGradient
 import android.graphics.Typeface
 import com.example.model.AdjustmentValues
 import com.example.model.AestheticFrame
+import com.example.model.LayerItem
+import com.example.model.LayerType
 import com.example.model.StickerOverlay
 import com.example.model.TextOverlay
 import kotlinx.coroutines.Dispatchers
@@ -31,17 +33,35 @@ object ImageProcessor {
         adjustments: AdjustmentValues,
         strength: Float = 1.0f,
         textOverlays: List<TextOverlay> = emptyList(),
-        stickers: List<StickerOverlay> = emptyList()
+        stickers: List<StickerOverlay> = emptyList(),
+        layers: List<LayerItem> = emptyList()
     ): Bitmap = withContext(Dispatchers.Default) {
         val width = source.width
         val height = source.height
 
-        // 1. Base transformation: Rotation & Flip
-        var currentBitmap = applyTransformations(source, adjustments)
+        val baseLayer = layers.find { it.type == LayerType.BASE_IMAGE }
+        val adjLayer = layers.find { it.type == LayerType.ADJUSTMENTS }
+        val grainLayer = layers.find { it.type == LayerType.GRAIN_LIGHT_LEAK }
+        val frameLayer = layers.find { it.type == LayerType.FRAME }
 
-        // 1b. Noise Reduction filter pass (smooth high-ISO grain before color matrix)
-        if (adjustments.noiseReduction > 0f) {
-            currentBitmap = applyNoiseReduction(currentBitmap, adjustments.noiseReduction * strength)
+        val isBaseVisible = baseLayer?.isVisible ?: true
+        val isAdjVisible = adjLayer?.isVisible ?: true
+        val adjOpacity = (adjLayer?.opacity ?: 1.0f) * strength
+        val isGrainVisible = grainLayer?.isVisible ?: true
+        val grainOpacity = (grainLayer?.opacity ?: 1.0f) * strength
+        val isFrameVisible = frameLayer?.isVisible ?: true
+        val frameOpacity = (frameLayer?.opacity ?: 1.0f) * strength
+
+        // 1. Base transformation: Rotation & Flip
+        var currentBitmap = if (isBaseVisible) {
+            applyTransformations(source, adjustments)
+        } else {
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        }
+
+        // 1b. Noise Reduction filter pass
+        if (adjustments.noiseReduction > 0f && isAdjVisible) {
+            currentBitmap = applyNoiseReduction(currentBitmap, adjustments.noiseReduction * adjOpacity)
         }
 
         // 2. Color / Tone adjustment via ColorMatrix
@@ -49,61 +69,88 @@ object ImageProcessor {
         val canvas = Canvas(result)
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        val colorMatrix = ColorMatrixBuilder.buildColorMatrix(adjustments, strength)
-        paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
+        if (isAdjVisible && adjOpacity > 0f) {
+            val colorMatrix = ColorMatrixBuilder.buildColorMatrix(adjustments, adjOpacity)
+            paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
+        }
         canvas.drawBitmap(currentBitmap, 0f, 0f, paint)
 
         // 3. Glow / Bloom overlay
-        if (adjustments.glow > 0f) {
-            drawGlowEffect(canvas, result.width, result.height, adjustments.glow * strength)
+        if (adjustments.glow > 0f && isGrainVisible && grainOpacity > 0f) {
+            drawGlowEffect(canvas, result.width, result.height, adjustments.glow * grainOpacity)
         }
 
         // 4. Light Leak effect
-        if (adjustments.lightLeak > 0f) {
-            drawLightLeakEffect(canvas, result.width, result.height, adjustments.lightLeak * strength)
+        if (adjustments.lightLeak > 0f && isGrainVisible && grainOpacity > 0f) {
+            drawLightLeakEffect(canvas, result.width, result.height, adjustments.lightLeak * grainOpacity)
         }
 
         // 5. Film Grain effect
-        if (adjustments.grain > 0f) {
-            drawGrainEffect(canvas, result.width, result.height, adjustments.grain * strength)
+        if (adjustments.grain > 0f && isGrainVisible && grainOpacity > 0f) {
+            drawGrainEffect(canvas, result.width, result.height, adjustments.grain * grainOpacity)
         }
 
         // 6. Dust & Scratch effect
-        if (adjustments.dustEffect > 0f) {
-            drawDustEffect(canvas, result.width, result.height, adjustments.dustEffect * strength)
+        if (adjustments.dustEffect > 0f && isGrainVisible && grainOpacity > 0f) {
+            drawDustEffect(canvas, result.width, result.height, adjustments.dustEffect * grainOpacity)
         }
 
         // 7. Vignette effect
-        if (adjustments.vignette > 0f) {
-            drawVignetteEffect(canvas, result.width, result.height, adjustments.vignette * strength)
+        if (adjustments.vignette > 0f && isGrainVisible && grainOpacity > 0f) {
+            drawVignetteEffect(canvas, result.width, result.height, adjustments.vignette * grainOpacity)
         }
 
-        // 8. Aesthetic Frames
-        if (adjustments.frame != AestheticFrame.NONE) {
-            drawAestheticFrame(canvas, result.width, result.height, adjustments.frame)
+        // 8a. Custom Photo Corner Rounding applied ONLY to imported photo/image layer
+        var photoLayerClipped = result
+        if (adjustments.photoCornerRadius > 0f && isFrameVisible && frameOpacity > 0f) {
+            photoLayerClipped = clipPhotoLayerCorners(photoLayerClipped, adjustments.photoCornerRadius * frameOpacity)
         }
 
-        // 8b. Custom Photo Corner Rounding & Matte Frame Padding
-        var finalResult = result
-        if (adjustments.photoCornerRadius > 0f || adjustments.frameMatteWidth > 0f) {
-            finalResult = applyPhotoCornerRoundingAndMatteFrame(
-                finalResult,
-                adjustments.photoCornerRadius * strength,
-                adjustments.frameMatteWidth * strength,
-                adjustments.frameMatteColor
+        // 8b. Embed photo layer inside Matte Frame Container if enabled
+        var framedResult = photoLayerClipped
+        if (adjustments.frameMatteWidth > 0f && isFrameVisible && frameOpacity > 0f) {
+            framedResult = applyMatteFrameContainer(
+                photoLayer = photoLayerClipped,
+                photoCornerRadius = adjustments.photoCornerRadius * frameOpacity,
+                matteWidth = adjustments.frameMatteWidth * frameOpacity,
+                matteColorLong = adjustments.frameMatteColor
             )
         }
 
-        val finalCanvas = Canvas(finalResult)
-
-        // 9. Text & Date stamp overlays
-        for (overlay in textOverlays) {
-            drawTextOverlay(finalCanvas, finalResult.width, finalResult.height, overlay)
+        // 8c. Aesthetic Frames drawn ON TOP (Polaroid, Film, Vintage, etc.)
+        val finalCanvas = Canvas(framedResult)
+        if (adjustments.frame != AestheticFrame.NONE && isFrameVisible && frameOpacity > 0f) {
+            drawAestheticFrame(finalCanvas, framedResult.width, framedResult.height, adjustments.frame)
         }
 
-        // 10. Sticker overlays
-        for (sticker in stickers) {
-            drawStickerOverlay(finalCanvas, finalResult.width, finalResult.height, sticker)
+        var finalResult = framedResult
+
+        // 9. Overlays according to explicit layer stack order or default order
+        val overlayLayers = layers.filter { it.type == LayerType.STICKER || it.type == LayerType.TEXT_OVERLAY }
+        if (overlayLayers.isNotEmpty()) {
+            for (l in overlayLayers) {
+                if (!l.isVisible || l.opacity <= 0f) continue
+                if (l.type == LayerType.TEXT_OVERLAY) {
+                    val overlay = textOverlays.find { it.id == l.associatedId }
+                    if (overlay != null) {
+                        drawTextOverlay(finalCanvas, finalResult.width, finalResult.height, overlay)
+                    }
+                } else if (l.type == LayerType.STICKER) {
+                    val sticker = stickers.find { it.id == l.associatedId }
+                    if (sticker != null) {
+                        val modifiedSticker = sticker.copy(alpha = sticker.alpha * l.opacity)
+                        drawStickerOverlay(finalCanvas, finalResult.width, finalResult.height, modifiedSticker)
+                    }
+                }
+            }
+        } else {
+            // Default fallbacks if layers list is empty
+            for (overlay in textOverlays) {
+                drawTextOverlay(finalCanvas, finalResult.width, finalResult.height, overlay)
+            }
+            for (sticker in stickers) {
+                drawStickerOverlay(finalCanvas, finalResult.width, finalResult.height, sticker)
+            }
         }
 
         finalResult
@@ -243,21 +290,49 @@ object ImageProcessor {
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), vignettePaint)
     }
 
+    private fun getPorterDuffMode(blendMode: String): PorterDuff.Mode {
+        return when (blendMode.uppercase()) {
+            "MULTIPLY" -> PorterDuff.Mode.MULTIPLY
+            "SCREEN" -> PorterDuff.Mode.SCREEN
+            "OVERLAY" -> PorterDuff.Mode.OVERLAY
+            "DARKEN" -> PorterDuff.Mode.DARKEN
+            "LIGHTEN" -> PorterDuff.Mode.LIGHTEN
+            "COLOR_DODGE", "COLORDODGE", "ADD" -> PorterDuff.Mode.ADD
+            "XOR" -> PorterDuff.Mode.XOR
+            else -> PorterDuff.Mode.SRC_OVER
+        }
+    }
+
     private fun drawTextOverlay(canvas: Canvas, width: Int, height: Int, overlay: TextOverlay) {
         val x = overlay.xPercent * width
         val y = overlay.yPercent * height
 
         val textSizePx = overlay.fontSizeSp * (width / 400f).coerceAtLeast(1.5f)
+        val selectedTypeface = when (overlay.fontStyle.uppercase()) {
+            "SERIF" -> Typeface.SERIF
+            "SANS", "SANSSERIF" -> Typeface.SANS_SERIF
+            "MONOSPACE" -> Typeface.MONOSPACE
+            "CURSIVE" -> Typeface.create("cursive", Typeface.BOLD)
+            "DISPLAYBOLD", "BOLD" -> Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            else -> if (overlay.isDateStamp) Typeface.MONOSPACE else Typeface.SERIF
+        }
+
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textSize = textSizePx
             textAlign = Paint.Align.CENTER
-            typeface = if (overlay.isDateStamp) Typeface.MONOSPACE else Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            typeface = selectedTypeface
             color = try {
                 Color.parseColor(overlay.colorHex)
             } catch (e: Exception) {
-                if (overlay.isDateStamp) Color.parseColor("#FF9800") else Color.WHITE
+                if (overlay.isDateStamp) Color.parseColor("#FF9500") else Color.WHITE
+            }
+            if (overlay.blendMode != "Normal") {
+                xfermode = PorterDuffXfermode(getPorterDuffMode(overlay.blendMode))
             }
         }
+
+        canvas.save()
+        canvas.rotate(overlay.rotation, x, y)
 
         if (overlay.hasBackgroundPill && !overlay.isDateStamp) {
             val bounds = Rect()
@@ -270,7 +345,7 @@ object ImageProcessor {
                 y + bounds.bottom + padding * 0.6f
             )
             val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.argb(140, 20, 25, 35)
+                color = Color.argb(150, 20, 25, 35)
                 style = Paint.Style.FILL
             }
             canvas.drawRoundRect(pillRect, padding * 0.8f, padding * 0.8f, pillPaint)
@@ -278,6 +353,7 @@ object ImageProcessor {
 
         // Draw text
         canvas.drawText(overlay.text, x, y, paint)
+        canvas.restore()
     }
 
     private fun drawStickerOverlay(canvas: Canvas, width: Int, height: Int, sticker: StickerOverlay) {
@@ -288,7 +364,12 @@ object ImageProcessor {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             textSize = sizePx
             textAlign = Paint.Align.CENTER
+            alpha = (sticker.alpha.coerceIn(0f, 1f) * 255).toInt()
+            if (sticker.blendMode != "Normal") {
+                xfermode = PorterDuffXfermode(getPorterDuffMode(sticker.blendMode))
+            }
         }
+
         canvas.save()
         canvas.rotate(sticker.rotation, x, y)
         canvas.drawText(sticker.symbol, x, y + sizePx * 0.35f, paint)
@@ -944,20 +1025,64 @@ object ImageProcessor {
         return denoised
     }
 
-    private fun applyPhotoCornerRoundingAndMatteFrame(
-        source: Bitmap,
-        cornerRadius: Float,
+    /**
+     * Clips ONLY the imported photo image layer with rounded corners, leaving
+     * outer frames, borders, and containers completely untouched.
+     */
+    private fun clipPhotoLayerCorners(
+        photoBitmap: Bitmap,
+        cornerRadius: Float
+    ): Bitmap {
+        if (cornerRadius <= 0f) return photoBitmap
+
+        val srcW = photoBitmap.width
+        val srcH = photoBitmap.height
+        val minDim = Math.min(srcW, srcH).toFloat()
+
+        val normRadius = (cornerRadius / 100f).coerceIn(0f, 1f)
+        val rx = (minDim / 2f) * normRadius
+
+        if (rx <= 0f) return photoBitmap
+
+        val output = Bitmap.createBitmap(srcW, srcH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+
+        val photoRect = RectF(0f, 0f, srcW.toFloat(), srcH.toFloat())
+        val clipPath = Path().apply {
+            addRoundRect(photoRect, rx, rx, Path.Direction.CW)
+        }
+
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+        canvas.save()
+        canvas.clipPath(clipPath)
+        canvas.drawBitmap(photoBitmap, 0f, 0f, paint)
+        canvas.restore()
+
+        return output
+    }
+
+    /**
+     * Embeds the photo layer inside a matte frame container if matteWidth > 0.
+     * The outer container corners remain square/rectangular, preserving shape,
+     * size, shadow, and spacing of the matte border.
+     */
+    private fun applyMatteFrameContainer(
+        photoLayer: Bitmap,
+        photoCornerRadius: Float,
         matteWidth: Float,
         matteColorLong: Long
     ): Bitmap {
-        if (cornerRadius <= 0f && matteWidth <= 0f) return source
+        if (matteWidth <= 0f) return photoLayer
 
-        val srcW = source.width
-        val srcH = source.height
-        val minDim = Math.min(srcW, srcH)
+        val srcW = photoLayer.width
+        val srcH = photoLayer.height
+        val minDim = Math.min(srcW, srcH).toFloat()
 
         val normMatte = (matteWidth / 100f).coerceIn(0f, 0.40f)
         val paddingPx = (minDim * 0.20f * normMatte).toInt()
+
+        if (paddingPx <= 0) return photoLayer
 
         val totalW = srcW + paddingPx * 2
         val totalH = srcH + paddingPx * 2
@@ -968,31 +1093,27 @@ object ImageProcessor {
         val matteColorInt = matteColorLong.toInt()
         val isTransparentMatte = (matteColorInt and 0xFF000000.toInt()) == 0
 
+        // 1. Solid rectangular background for outer matte container (corners remain square, shape & size preserved)
         if (!isTransparentMatte) {
             canvas.drawColor(matteColorInt)
 
-            if (paddingPx > 0) {
-                val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.BLACK
-                    alpha = 45
-                }
-                val normRadius = (cornerRadius / 100f).coerceIn(0f, 1f)
-                val maxRadius = minDim / 2f
-                val r = maxRadius * normRadius
-                val shadowRect = RectF(
-                    paddingPx.toFloat() - 2f,
-                    paddingPx.toFloat() + 2f,
-                    (paddingPx + srcW).toFloat() + 2f,
-                    (paddingPx + srcH).toFloat() + 4f
-                )
-                canvas.drawRoundRect(shadowRect, r, r, shadowPaint)
+            // Soft drop shadow matching photo layer outline
+            val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.BLACK
+                alpha = 45
             }
+            val normRadius = (photoCornerRadius / 100f).coerceIn(0f, 1f)
+            val rx = (minDim / 2f) * normRadius
+            val shadowRect = RectF(
+                paddingPx.toFloat() - 2f,
+                paddingPx.toFloat() + 2f,
+                (paddingPx + srcW).toFloat() + 2f,
+                (paddingPx + srcH).toFloat() + 4f
+            )
+            canvas.drawRoundRect(shadowRect, rx, rx, shadowPaint)
         }
 
-        val normRadius = (cornerRadius / 100f).coerceIn(0f, 1f)
-        val maxRadius = minDim / 2f
-        val rx = maxRadius * normRadius
-
+        // 2. Draw photo layer (already clipped by photoCornerRadius) into photoRect
         val photoRect = RectF(
             paddingPx.toFloat(),
             paddingPx.toFloat(),
@@ -1000,25 +1121,18 @@ object ImageProcessor {
             (paddingPx + srcH).toFloat()
         )
 
-        val clipPath = Path().apply {
-            addRoundRect(photoRect, rx, rx, Path.Direction.CW)
-        }
-
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        canvas.drawBitmap(photoLayer, paddingPx.toFloat(), paddingPx.toFloat(), paint)
 
-        canvas.save()
-        canvas.clipPath(clipPath)
-        canvas.drawBitmap(source, paddingPx.toFloat(), paddingPx.toFloat(), paint)
-        canvas.restore()
-
-        if (rx > 0f || paddingPx > 0) {
-            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                style = Paint.Style.STROKE
-                strokeWidth = Math.max(2f, minDim * 0.0035f)
-                color = if (isTransparentMatte) Color.WHITE else Color.argb(45, 0, 0, 0)
-            }
-            canvas.drawRoundRect(photoRect, rx, rx, strokePaint)
+        // 3. Inner stroke around photo cutout
+        val normRadius = (photoCornerRadius / 100f).coerceIn(0f, 1f)
+        val rx = (minDim / 2f) * normRadius
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = Math.max(2f, minDim * 0.0035f)
+            color = if (isTransparentMatte) Color.WHITE else Color.argb(45, 0, 0, 0)
         }
+        canvas.drawRoundRect(photoRect, rx, rx, strokePaint)
 
         return output
     }

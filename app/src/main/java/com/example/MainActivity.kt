@@ -152,7 +152,7 @@ fun VenuslyApp(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding(),
-                color = if (isDark) Color(0xFF141B2D).copy(alpha = 0.95f) else Color(0xFFFFFFFF).copy(alpha = 0.95f),
+                color = MaterialTheme.colorScheme.surface,
                 shadowElevation = if (isCompactMode) 8.dp else 16.dp,
                 tonalElevation = 4.dp
             ) {
@@ -189,8 +189,8 @@ fun VenuslyApp(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
                                 indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                unselectedIconColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
-                                unselectedTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         )
                     }

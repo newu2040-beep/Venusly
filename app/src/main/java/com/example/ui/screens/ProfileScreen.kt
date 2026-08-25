@@ -661,7 +661,7 @@ fun ProfileScreen(
                     )
 
                     Text(
-                        text = "Venusly Aesthetic Photo Studio • v2.5.0\nCrafted with modern Jetpack Compose & Clean Material 3",
+                        text = "Venusly Aesthetic Photo Studio • v3.0.0\nCrafted with modern Jetpack Compose & Clean Material 3",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -702,11 +702,10 @@ private fun ProfileInfoPill(
     text: String,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -736,7 +735,6 @@ private fun StatCard(
     icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
     val isCompactMode = LocalCompactMode.current
 
     Card(
@@ -744,7 +742,7 @@ private fun StatCard(
             .clip(RoundedCornerShape(if (isCompactMode) 14.dp else 18.dp))
             .border(
                 1.dp,
-                if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0),
+                MaterialTheme.colorScheme.outlineVariant,
                 RoundedCornerShape(if (isCompactMode) 14.dp else 18.dp)
             ),
         shape = RoundedCornerShape(if (isCompactMode) 14.dp else 18.dp),
@@ -789,14 +787,13 @@ private fun CustomPresetItemCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
     val isCompactMode = LocalCompactMode.current
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(16.dp)),
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {

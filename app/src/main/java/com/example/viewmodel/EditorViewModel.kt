@@ -16,8 +16,11 @@ import com.example.data.ProjectEntity
 import com.example.engine.BitmapUtils
 import com.example.engine.ImageProcessor
 import com.example.engine.NotificationHelper
+import com.example.engine.SmartCropEngine
 import com.example.model.AdjustmentValues
 import com.example.model.AestheticFrame
+import com.example.model.BatchItemStatus
+import com.example.model.BatchProcessingItem
 import com.example.model.CropAspectRatio
 import com.example.model.EditorTab
 import com.example.model.ExportFormatOption
@@ -25,6 +28,8 @@ import com.example.model.ExportResolution
 import com.example.model.FilterCategory
 import com.example.model.FilterPreset
 import com.example.model.GridOverlayMode
+import com.example.model.LayerItem
+import com.example.model.LayerType
 import com.example.model.StickerOverlay
 import com.example.model.TextOverlay
 import kotlinx.coroutines.Job
@@ -111,6 +116,26 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _exportStatusMessage = MutableStateFlow<String?>(null)
     val exportStatusMessage: StateFlow<String?> = _exportStatusMessage.asStateFlow()
+
+    // Layers State
+    private val _layers = MutableStateFlow<List<LayerItem>>(createDefaultLayers())
+    val layers: StateFlow<List<LayerItem>> = _layers.asStateFlow()
+
+    private val _selectedLayerId = MutableStateFlow<String?>(null)
+    val selectedLayerId: StateFlow<String?> = _selectedLayerId.asStateFlow()
+
+    // Batch Processing State
+    private val _batchItems = MutableStateFlow<List<BatchProcessingItem>>(emptyList())
+    val batchItems: StateFlow<List<BatchProcessingItem>> = _batchItems.asStateFlow()
+
+    private val _isBatchProcessing = MutableStateFlow(false)
+    val isBatchProcessing: StateFlow<Boolean> = _isBatchProcessing.asStateFlow()
+
+    private val _batchProgress = MutableStateFlow(0f)
+    val batchProgress: StateFlow<Float> = _batchProgress.asStateFlow()
+
+    private val _batchStatusMessage = MutableStateFlow<String?>(null)
+    val batchStatusMessage: StateFlow<String?> = _batchStatusMessage.asStateFlow()
 
     private var processJob: Job? = null
 
@@ -259,6 +284,25 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         triggerRender()
     }
 
+    fun performSmartAutoCrop(targetRatio: Float) {
+        val current = _originalBitmap.value ?: return
+        viewModelScope.launch {
+            _isProcessing.value = true
+            pushUndoState()
+            val cropped = SmartCropEngine.autoCropSubject(current, targetRatio)
+            _originalBitmap.value = cropped
+            triggerRender()
+            _isProcessing.value = false
+        }
+    }
+
+    private val _selectedTextOverlayId = MutableStateFlow<String?>(null)
+    val selectedTextOverlayId: StateFlow<String?> = _selectedTextOverlayId.asStateFlow()
+
+    fun selectTextOverlay(id: String?) {
+        _selectedTextOverlayId.value = id
+    }
+
     fun addDateStamp() {
         val dateFormat = java.text.SimpleDateFormat("''yy MM dd", java.util.Locale.US)
         val dateString = dateFormat.format(java.util.Date())
@@ -268,29 +312,86 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             yPercent = 0.92f,
             fontSizeSp = 16f,
             colorHex = "#FF9500",
+            fontStyle = "Monospace",
             hasBackgroundPill = false,
             isDateStamp = true
         )
         _textOverlays.value = _textOverlays.value + newOverlay
+        _selectedTextOverlayId.value = newOverlay.id
         triggerRender()
     }
 
-    fun addText(text: String = "VENUSLY") {
+    fun addText(text: String = "VENUSLY", fontStyle: String = "Serif") {
         val newOverlay = TextOverlay(
             text = text,
             xPercent = 0.5f,
             yPercent = 0.82f,
-            fontSizeSp = 20f,
+            fontSizeSp = 22f,
             colorHex = "#FFFFFF",
+            fontStyle = fontStyle,
             hasBackgroundPill = true,
             isDateStamp = false
         )
         _textOverlays.value = _textOverlays.value + newOverlay
+        _selectedTextOverlayId.value = newOverlay.id
         triggerRender()
     }
 
     fun removeTextOverlay(id: String) {
         _textOverlays.value = _textOverlays.value.filter { it.id != id }
+        if (_selectedTextOverlayId.value == id) {
+            _selectedTextOverlayId.value = null
+        }
+        triggerRender()
+    }
+
+    fun updateTextPosition(id: String, xPercent: Float, yPercent: Float) {
+        _textOverlays.value = _textOverlays.value.map {
+            if (it.id == id) {
+                it.copy(
+                    xPercent = xPercent.coerceIn(0.05f, 0.95f),
+                    yPercent = yPercent.coerceIn(0.05f, 0.95f)
+                )
+            } else it
+        }
+        triggerRender()
+    }
+
+    fun updateTextOverlayProperties(
+        id: String,
+        text: String? = null,
+        colorHex: String? = null,
+        fontStyle: String? = null,
+        fontSizeSp: Float? = null,
+        hasBackgroundPill: Boolean? = null,
+        rotation: Float? = null,
+        blendMode: String? = null
+    ) {
+        _textOverlays.value = _textOverlays.value.map {
+            if (it.id == id) {
+                it.copy(
+                    text = text ?: it.text,
+                    colorHex = colorHex ?: it.colorHex,
+                    fontStyle = fontStyle ?: it.fontStyle,
+                    fontSizeSp = fontSizeSp ?: it.fontSizeSp,
+                    hasBackgroundPill = hasBackgroundPill ?: it.hasBackgroundPill,
+                    rotation = rotation ?: it.rotation,
+                    blendMode = blendMode ?: it.blendMode
+                )
+            } else it
+        }
+        triggerRender()
+    }
+
+    fun duplicateTextOverlay(id: String) {
+        val existing = _textOverlays.value.find { it.id == id } ?: return
+        val copied = existing.copy(
+            id = java.util.UUID.randomUUID().toString(),
+            xPercent = (existing.xPercent + 0.05f).coerceAtMost(0.9f),
+            yPercent = (existing.yPercent + 0.05f).coerceAtMost(0.9f)
+        )
+        _textOverlays.value = _textOverlays.value + copied
+        _selectedTextOverlayId.value = copied.id
         triggerRender()
     }
 
@@ -306,10 +407,45 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             symbol = symbol,
             xPercent = 0.5f,
             yPercent = 0.5f,
-            sizeDp = 56f
+            sizeDp = 64f
         )
         _stickers.value = _stickers.value + newSticker
         _selectedStickerId.value = newSticker.id
+        triggerRender()
+    }
+
+    fun addCustomStickerImage(uri: String) {
+        val newSticker = StickerOverlay(
+            symbol = "📷",
+            customImageUri = uri,
+            xPercent = 0.5f,
+            yPercent = 0.5f,
+            sizeDp = 110f
+        )
+        _stickers.value = _stickers.value + newSticker
+        _selectedStickerId.value = newSticker.id
+        triggerRender()
+    }
+
+    fun updateStickerProperties(
+        id: String,
+        sizeDp: Float? = null,
+        rotation: Float? = null,
+        alpha: Float? = null,
+        blendMode: String? = null,
+        tintColorHex: String? = null
+    ) {
+        _stickers.value = _stickers.value.map {
+            if (it.id == id) {
+                it.copy(
+                    sizeDp = sizeDp ?: it.sizeDp,
+                    rotation = rotation ?: it.rotation,
+                    alpha = alpha ?: it.alpha,
+                    blendMode = blendMode ?: it.blendMode,
+                    tintColorHex = tintColorHex ?: it.tintColorHex
+                )
+            } else it
+        }
         triggerRender()
     }
 
@@ -376,22 +512,230 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         triggerRender()
     }
 
+    private fun createDefaultLayers(): List<LayerItem> {
+        return listOf(
+            LayerItem(id = "layer_base", type = LayerType.BASE_IMAGE, name = "Base Photo"),
+            LayerItem(id = "layer_adj", type = LayerType.ADJUSTMENTS, name = "Color Grading & Preset"),
+            LayerItem(id = "layer_grain", type = LayerType.GRAIN_LIGHT_LEAK, name = "Grain & Light Effects"),
+            LayerItem(id = "layer_frame", type = LayerType.FRAME, name = "Frame & Borders")
+        )
+    }
+
+    private fun syncLayersWithOverlays() {
+        val currentList = _layers.value.toMutableList()
+        val existingIds = currentList.mapNotNull { it.associatedId }.toSet()
+
+        for (text in _textOverlays.value) {
+            if (!existingIds.contains(text.id)) {
+                val layerName = if (text.isDateStamp) "Date Stamp ('${text.text})" else "Text: \"${text.text.take(12)}\""
+                currentList.add(
+                    LayerItem(
+                        id = "text_layer_${text.id}",
+                        type = LayerType.TEXT_OVERLAY,
+                        name = layerName,
+                        associatedId = text.id
+                    )
+                )
+            }
+        }
+
+        for (stk in _stickers.value) {
+            if (!existingIds.contains(stk.id)) {
+                val layerName = "Sticker ${stk.symbol}"
+                currentList.add(
+                    LayerItem(
+                        id = "sticker_layer_${stk.id}",
+                        type = LayerType.STICKER,
+                        name = layerName,
+                        associatedId = stk.id
+                    )
+                )
+            }
+        }
+
+        val validTextIds = _textOverlays.value.map { it.id }.toSet()
+        val validStickerIds = _stickers.value.map { it.id }.toSet()
+
+        val filtered = currentList.filter { item ->
+            when (item.type) {
+                LayerType.TEXT_OVERLAY -> validTextIds.contains(item.associatedId)
+                LayerType.STICKER -> validStickerIds.contains(item.associatedId)
+                else -> true
+            }
+        }
+        _layers.value = filtered
+    }
+
+    fun toggleLayerVisibility(layerId: String) {
+        _layers.value = _layers.value.map {
+            if (it.id == layerId) it.copy(isVisible = !it.isVisible) else it
+        }
+        triggerRender()
+    }
+
+    fun setLayerOpacity(layerId: String, opacity: Float) {
+        _layers.value = _layers.value.map {
+            if (it.id == layerId) it.copy(opacity = opacity.coerceIn(0f, 1f)) else it
+        }
+        triggerRender()
+    }
+
+    fun toggleLayerLock(layerId: String) {
+        _layers.value = _layers.value.map {
+            if (it.id == layerId) it.copy(isLocked = !it.isLocked) else it
+        }
+    }
+
+    fun moveLayerUp(index: Int) {
+        if (index <= 0) return
+        val list = _layers.value.toMutableList()
+        val item = list.removeAt(index)
+        list.add(index - 1, item)
+        _layers.value = list
+        triggerRender()
+    }
+
+    fun moveLayerDown(index: Int) {
+        val list = _layers.value.toMutableList()
+        if (index >= list.size - 1) return
+        val item = list.removeAt(index)
+        list.add(index + 1, item)
+        _layers.value = list
+        triggerRender()
+    }
+
+    fun selectLayer(layerId: String) {
+        _selectedLayerId.value = layerId
+        val target = _layers.value.find { it.id == layerId } ?: return
+        if (target.associatedId != null) {
+            if (target.type == LayerType.TEXT_OVERLAY) {
+                _selectedTextOverlayId.value = target.associatedId
+            } else if (target.type == LayerType.STICKER) {
+                _selectedStickerId.value = target.associatedId
+            }
+        }
+    }
+
+    // Batch Processing Methods
+    fun loadBatchPhotos(uris: List<Uri>) {
+        viewModelScope.launch {
+            val items = uris.map { uri ->
+                val thumb = BitmapUtils.decodeSampledBitmapFromUri(getApplication(), uri, 300, 300)
+                BatchProcessingItem(
+                    uri = uri,
+                    thumbnailBitmap = thumb,
+                    status = BatchItemStatus.PENDING
+                )
+            }
+            _batchItems.value = items
+            _batchStatusMessage.value = "${items.size} photos ready for batch filter application."
+        }
+    }
+
+    fun removeBatchPhoto(id: String) {
+        _batchItems.value = _batchItems.value.filter { it.id != id }
+    }
+
+    fun clearBatch() {
+        _batchItems.value = emptyList()
+        _isBatchProcessing.value = false
+        _batchProgress.value = 0f
+        _batchStatusMessage.value = null
+    }
+
+    fun startBatchProcessing(customPreset: FilterPreset? = null) {
+        if (_batchItems.value.isEmpty()) return
+        viewModelScope.launch {
+            _isBatchProcessing.value = true
+            _batchProgress.value = 0f
+            val targetAdjustments = customPreset?.adjustments ?: _currentAdjustments.value
+            val targetPresetStrength = if (customPreset != null) 0.85f else _presetStrength.value
+            val targetTexts = _textOverlays.value
+            val targetStickers = _stickers.value
+            val targetLayers = _layers.value
+
+            val total = _batchItems.value.size
+            var completedCount = 0
+
+            val updatedList = _batchItems.value.toMutableList()
+
+            for (i in updatedList.indices) {
+                val item = updatedList[i]
+                updatedList[i] = item.copy(status = BatchItemStatus.PROCESSING)
+                _batchItems.value = updatedList.toList()
+                _batchStatusMessage.value = "Processing photo ${i + 1} of $total..."
+
+                try {
+                    val fullBitmap = BitmapUtils.decodeSampledBitmapFromUri(getApplication(), item.uri, 2048, 2048)
+                    if (fullBitmap != null) {
+                        val processed = ImageProcessor.applyAdjustments(
+                            source = fullBitmap,
+                            adjustments = targetAdjustments,
+                            strength = targetPresetStrength,
+                            textOverlays = targetTexts,
+                            stickers = targetStickers,
+                            layers = targetLayers
+                        )
+
+                        val savedUri = BitmapUtils.saveBitmapToGallery(
+                            context = getApplication(),
+                            bitmap = processed,
+                            title = "Venusly_Batch_${System.currentTimeMillis()}_${i + 1}"
+                        )
+
+                        completedCount++
+                        updatedList[i] = updatedList[i].copy(
+                            status = BatchItemStatus.COMPLETED,
+                            resultUri = savedUri
+                        )
+                    } else {
+                        updatedList[i] = updatedList[i].copy(
+                            status = BatchItemStatus.FAILED,
+                            errorMessage = "Failed to load image"
+                        )
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    updatedList[i] = updatedList[i].copy(
+                        status = BatchItemStatus.FAILED,
+                        errorMessage = e.localizedMessage ?: "Processing error"
+                    )
+                }
+
+                _batchItems.value = updatedList.toList()
+                _batchProgress.value = (i + 1).toFloat() / total.toFloat()
+            }
+
+            _isBatchProcessing.value = false
+            _batchStatusMessage.value = "Batch completed! Exported $completedCount of $total photos to gallery."
+            NotificationHelper.showExportSuccessNotification(
+                context = getApplication(),
+                imageUri = updatedList.firstOrNull()?.resultUri,
+                title = "Batch Filter Processing Complete ✨",
+                message = "Applied filter stack and saved $completedCount photos to your gallery."
+            )
+        }
+    }
+
     private fun triggerRender() {
         processJob?.cancel()
         processJob = viewModelScope.launch {
             delay(16) // Smooth 60fps debounce
+            syncLayersWithOverlays()
             val source = _originalBitmap.value ?: return@launch
             val adjustments = _currentAdjustments.value
             val strength = _presetStrength.value
             val texts = _textOverlays.value
             val stks = _stickers.value
+            val layerList = _layers.value
 
             val processed = ImageProcessor.applyAdjustments(
                 source = source,
                 adjustments = adjustments,
                 strength = strength,
                 textOverlays = texts,
-                stickers = stks
+                stickers = stks,
+                layers = layerList
             )
             _processedBitmap.value = processed
             autoSaveDraft()

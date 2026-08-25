@@ -155,15 +155,15 @@ private fun ToolFeatureCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
-    val bg = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFFFF)
+    val bg = MaterialTheme.colorScheme.surface
+    val borderCol = MaterialTheme.colorScheme.outlineVariant
 
     Card(
         modifier = modifier
             .testTag("tool_card_${title.lowercase().take(8)}")
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(22.dp))
+            .border(1.dp, borderCol, RoundedCornerShape(22.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = bg)

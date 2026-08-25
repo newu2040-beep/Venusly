@@ -77,9 +77,8 @@ fun GlassmorphicSurface(
     shape: RoundedCornerShape = RoundedCornerShape(24.dp),
     content: @Composable () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
-    val bgColor = if (isDark) Color(0xFF141B2D).copy(alpha = 0.85f) else Color(0xFFFFFFFF).copy(alpha = 0.90f)
-    val borderColor = if (isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFE2E8F0).copy(alpha = 0.7f)
+    val bgColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
 
     Surface(
         modifier = modifier
@@ -103,7 +102,7 @@ fun ThemeTogglePill(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pillBg = if (isDarkMode) Color(0xFF1E293B) else Color(0xFFE0EDFD)
+    val pillBg = MaterialTheme.colorScheme.surfaceVariant
     Box(
         modifier = modifier
             .testTag("theme_toggle")
@@ -124,13 +123,13 @@ fun ThemeTogglePill(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(CircleShape)
-                    .background(if (!isDarkMode) VenuslyBlue else Color.Transparent),
+                    .background(if (!isDarkMode) MaterialTheme.colorScheme.primary else Color.Transparent),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Filled.LightMode,
                     contentDescription = "Light Mode",
-                    tint = if (!isDarkMode) Color.White else Color(0xFF94A3B8),
+                    tint = if (!isDarkMode) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -139,13 +138,13 @@ fun ThemeTogglePill(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(CircleShape)
-                    .background(if (isDarkMode) VenuslyBlue else Color.Transparent),
+                    .background(if (isDarkMode) MaterialTheme.colorScheme.primary else Color.Transparent),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Filled.DarkMode,
                     contentDescription = "Dark Mode",
-                    tint = if (isDarkMode) Color.White else Color(0xFF64748B),
+                    tint = if (isDarkMode) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -161,9 +160,8 @@ fun QuickActionCard(
     modifier: Modifier = Modifier
 ) {
     val isCompactMode = LocalCompactMode.current
-    val isDark = isSystemInDarkTheme()
-    val bg = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFFFF)
-    val borderCol = if (isDark) Color(0xFF334155) else Color(0xFFEBF3FE)
+    val bg = MaterialTheme.colorScheme.surface
+    val borderCol = MaterialTheme.colorScheme.outlineVariant
 
     Column(
         modifier = modifier
@@ -180,7 +178,7 @@ fun QuickActionCard(
             modifier = Modifier
                 .size(if (isCompactMode) 36.dp else 44.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -211,8 +209,7 @@ fun AestheticFilterCard(
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
-    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
 
     Card(
         modifier = modifier
@@ -314,8 +311,8 @@ fun PillSliderControl(
     modifier: Modifier = Modifier
 ) {
     val isCompactMode = LocalCompactMode.current
-    val isDark = isSystemInDarkTheme()
-    val bg = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFFFF)
+    val bg = MaterialTheme.colorScheme.surface
+    val borderCol = MaterialTheme.colorScheme.outlineVariant
 
     Column(
         modifier = modifier
@@ -323,6 +320,7 @@ fun PillSliderControl(
             .fillMaxWidth()
             .clip(RoundedCornerShape(if (isCompactMode) 12.dp else 18.dp))
             .background(bg)
+            .border(1.dp, borderCol, RoundedCornerShape(if (isCompactMode) 12.dp else 18.dp))
             .padding(
                 horizontal = if (isCompactMode) 12.dp else 16.dp,
                 vertical = if (isCompactMode) 8.dp else 12.dp
@@ -358,7 +356,7 @@ fun PillSliderControl(
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.primary,
                 activeTrackColor = MaterialTheme.colorScheme.primary,
-                inactiveTrackColor = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+                inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
             ),
             modifier = Modifier.fillMaxWidth()
         )
@@ -372,21 +370,21 @@ fun ToolParameterCard(
     icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
-    val bg = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFFFF)
+    val bg = MaterialTheme.colorScheme.surface
+    val borderCol = MaterialTheme.colorScheme.outlineVariant
 
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(bg)
-            .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
+            .border(1.dp, borderCol, RoundedCornerShape(16.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             imageVector = icon,
             contentDescription = title,
-            tint = VenuslyBlue,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(18.dp)
         )
         Spacer(modifier = Modifier.height(4.dp))
